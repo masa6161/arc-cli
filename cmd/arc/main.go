@@ -55,10 +55,8 @@ var (
 	guidance            string
 	guidanceFile        string
 	verbose             bool
-	local               bool
 	worktreeBranch      string
 	prNumber            string
-	autoYes             bool
 	excludePatterns     []string
 	noConfig            bool
 	agentName           string
@@ -142,15 +140,10 @@ Exit codes:
 		"Path to file containing review guidance (env: ARC_GUIDANCE_FILE)")
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false,
 		"Print agent messages as they arrive")
-	rootCmd.Flags().BoolVarP(&local, "local", "l", false,
-		"Skip posting findings to a PR")
 	rootCmd.Flags().StringVarP(&worktreeBranch, "worktree-branch", "B", "",
 		"Review a branch in a temporary worktree")
 	rootCmd.Flags().StringVar(&prNumber, "pr", "",
 		"Review a PR by number (fetches into temp worktree)")
-
-	rootCmd.Flags().BoolVarP(&autoYes, "yes", "y", false,
-		"Automatically submit review without prompting")
 
 	// Filtering options
 	rootCmd.Flags().StringArrayVar(&excludePatterns, "exclude-pattern", nil,
@@ -674,11 +667,10 @@ func runReview(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Auto-detect PR for current branch if not explicitly specified and not in local mode
-	// This enables PR feedback summarization even without --pr flag
-	// Skip auto-detection if PR feedback is disabled since the PR number is only used for feedback
+	// Auto-detect PR number for current branch when --pr is not specified.
+	// Skip auto-detection if PR feedback is disabled since the PR number is only used for feedback.
 	detectedPR := prNumber
-	if detectedPR == "" && !local && cfgResult.resolved.PRFeedbackEnabled && github.IsGHAvailable() {
+	if detectedPR == "" && cfgResult.resolved.PRFeedbackEnabled && github.IsGHAvailable() {
 		if detected, err := github.GetCurrentPRNumber(ctx, worktreeBranch); err == nil {
 			detectedPR = detected
 			if verbose {
@@ -691,8 +683,6 @@ func runReview(cmd *cobra.Command, _ []string) error {
 	opts := ReviewOpts{
 		ResolvedConfig:  cfgResult.resolved,
 		Verbose:         verbose,
-		Local:           local,
-		AutoYes:         autoYes,
 		PRNumber:        prNumber,
 		DetectedPR:      detectedPR,
 		WorktreeBranch:  worktreeBranch,

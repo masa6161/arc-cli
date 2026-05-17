@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 
@@ -658,8 +657,6 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 	feedbackWg.Wait()
 
 	var fpFilteredCount int
-	var fpRemoved []domain.FPRemovedInfo
-	var noiseRemoved []domain.FPRemovedInfo
 	var noiseFindingsForDisplay []domain.FindingGroup
 	if opts.FPFilterEnabled && summaryResult.ExitCode == 0 && len(summaryResult.Grouped.Findings) > 0 && ctx.Err() == nil {
 		fpSpinner := terminal.NewPhaseSpinner("Filtering false positives")
@@ -719,22 +716,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 			fpFilteredCount = fpResult.RemovedCount
 			stats.FPFilterDuration = fpResult.Duration
 
-			for _, r := range fpResult.Removed {
-				fpRemoved = append(fpRemoved, domain.FPRemovedInfo{
-					Sources:   r.Finding.Sources,
-					FPScore:   r.FPScore,
-					Reasoning: r.Reasoning,
-					Title:     r.Finding.Title,
-				})
-			}
-
 			for _, n := range fpResult.Noise {
-				noiseRemoved = append(noiseRemoved, domain.FPRemovedInfo{
-					Sources:   n.Finding.Sources,
-					FPScore:   n.FPScore,
-					Reasoning: n.Reasoning,
-					Title:     n.Finding.Title,
-				})
 				noiseFindingsForDisplay = append(noiseFindingsForDisplay, n.Finding)
 			}
 			stats.NoiseFilteredCount = fpResult.NoiseCount
@@ -752,27 +734,15 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		return domain.ExitInterrupted
 	}
 
-	var excludeFiltered []domain.FindingGroup
 	if len(opts.ExcludePatterns) > 0 {
 		f, err := filter.New(opts.ExcludePatterns)
 		if err != nil {
 			logger.Logf(terminal.StyleError, "Invalid exclude pattern: %v", err)
 			return domain.ExitError
 		}
-		preExclude := summaryResult.Grouped.Findings
 		summaryResult.Grouped = f.Apply(summaryResult.Grouped)
-		excludeFiltered = diffFindingGroups(preExclude, summaryResult.Grouped.Findings)
 	}
 
-	// Build disposition map for LGTM annotation
-	dispositions := domain.BuildDispositions(
-		len(aggregated),
-		summaryResult.Grouped.Info,
-		fpRemoved,
-		noiseRemoved,
-		excludeFiltered,
-		summaryResult.Grouped.Findings,
-	)
 	// Severity reconcile now lives in summarizer.backfillSeverity (3 rules:
 	// empty Sources → blocking; any aggregated source blocking → blocking;
 	// otherwise default to advisory). Keeping a second pass here would
@@ -810,26 +780,21 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		return domain.ExitError
 	}
 
-	// Handle PR actions based on overall verdict.
-	// "ok"        → LGTM path, exit 0
-	// "advisory"  → findings path, exit 0 (unless --strict, then 1)
-	// "blocking"  → findings path, exit 1
+	// Map verdict to exit code.
+	// "ok"        → exit 0
+	// "advisory"  → exit 0 (unless --strict, then 1)
+	// "blocking"  → exit 1
 	verdict := summaryResult.Grouped.Verdict
 	if verdict == "ok" {
-		return handleLGTM(ctx, opts, allFindings, aggregated, dispositions, stats, logger)
+		return domain.ExitNoFindings
 	}
-
-	findingsCode, finalVerdict := handleFindings(ctx, opts, summaryResult.Grouped, aggregated, ccResult, ccBlocking, ccAdvisory, verdict, opts.Strict, stats, logger)
-	return applyVerdictExitPolicy(finalVerdict, opts.Strict, findingsCode)
+	return applyVerdictExitPolicy(verdict, opts.Strict, domain.ExitFindings)
 }
 
-// applyVerdictExitPolicy maps a verdict + strict flag + handleFindings exit code
-// to the final exit code per Part C policy:
+// applyVerdictExitPolicy maps a verdict + strict flag to the final exit code:
 //
-//	verdict=="ok"       → findingsCode unchanged (caller handles LGTM branch)
-//	verdict=="advisory" → 0 unless strict; strict keeps findingsCode
-//	verdict=="blocking" → findingsCode unchanged (1 on findings)
-//	propagates non-ExitFindings codes (e.g. interrupted/error) unchanged
+//	verdict=="advisory" && !strict → ExitNoFindings (exit 0)
+//	otherwise                      → findingsCode unchanged
 func applyVerdictExitPolicy(verdict string, strict bool, findingsCode domain.ExitCode) domain.ExitCode {
 	if verdict == "advisory" && !strict && findingsCode == domain.ExitFindings {
 		return domain.ExitNoFindings
@@ -1526,21 +1491,6 @@ func buildMediumDiffSpecs(
 		return nil, nil
 	}
 	return buildDiffSpecsCore(groups, fullDiff, guidance, diffPrecomputed, archAgent, diffAgents, false)
-}
-
-// diffFindingGroups returns groups present in before but not in after.
-// Relies on filter.Apply preserving order, so after is an ordered subsequence.
-func diffFindingGroups(before, after []domain.FindingGroup) []domain.FindingGroup {
-	j := 0
-	var removed []domain.FindingGroup
-	for i := range before {
-		if j < len(after) && slices.Equal(before[i].Sources, after[j].Sources) {
-			j++
-		} else {
-			removed = append(removed, before[i])
-		}
-	}
-	return removed
 }
 
 // formatSpec formats a model/effort pair for the verbose effective matrix log.

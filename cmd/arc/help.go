@@ -27,7 +27,7 @@ var flagGroups = []flagGroup{
 	},
 	{
 		title: "PR Integration",
-		flags: []string{"pr", "yes", "local", "no-pr-feedback", "worktree-branch"},
+		flags: []string{"pr", "no-pr-feedback", "worktree-branch"},
 	},
 	{
 		title: "Filtering",
