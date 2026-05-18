@@ -110,10 +110,8 @@ func TestFlagGroupsCoverAllFlags(t *testing.T) {
 	cmd.Flags().StringVar(&guidance, "guidance", "", "")
 	cmd.Flags().StringVar(&guidanceFile, "guidance-file", "", "")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "")
-	cmd.Flags().BoolVarP(&local, "local", "l", false, "")
 	cmd.Flags().StringVarP(&worktreeBranch, "worktree-branch", "B", "", "")
 	cmd.Flags().StringVar(&prNumber, "pr", "", "")
-	cmd.Flags().BoolVarP(&autoYes, "yes", "y", false, "")
 	cmd.Flags().StringArrayVar(&excludePatterns, "exclude-pattern", nil, "")
 	cmd.Flags().BoolVar(&noConfig, "no-config", false, "")
 	cmd.Flags().StringVarP(&agentName, "reviewer-agent", "a", "codex", "")
@@ -123,6 +121,13 @@ func TestFlagGroupsCoverAllFlags(t *testing.T) {
 	cmd.Flags().IntVar(&fpThreshold, "fp-threshold", 75, "")
 	cmd.Flags().BoolVar(&noPRFeedback, "no-pr-feedback", false, "")
 	cmd.Flags().StringVar(&prFeedbackAgent, "pr-feedback-agent", "", "")
+	cmd.Flags().StringVar(&reviewerModel, "reviewer-model", "", "")
+	cmd.Flags().StringVar(&summarizerModel, "summarizer-model", "", "")
+	cmd.Flags().StringVar(&fpFilterAgentName, "fp-filter-agent", "", "")
+	cmd.Flags().StringVar(&fpFilterModel, "fp-filter-model", "", "")
+	cmd.Flags().StringVar(&fpFilterEffort, "fp-filter-effort", "", "")
+	cmd.Flags().BoolVar(&showNoise, "show-noise", false, "")
+	cmd.Flags().BoolVar(&noTriage, "no-triage", false, "")
 
 	var uncategorized []string
 	cmd.Flags().VisitAll(func(f *pflag.Flag) {
@@ -133,5 +138,19 @@ func TestFlagGroupsCoverAllFlags(t *testing.T) {
 
 	if len(uncategorized) > 0 {
 		t.Errorf("flags not assigned to any group in flagGroups: %v\nAdd them to a group in help.go", uncategorized)
+	}
+
+	// Reverse check: every flag name listed in flagGroups must exist in cmd.Flags().
+	var stale []string
+	cmd.Flags().VisitAll(func(_ *pflag.Flag) {}) // ensure flag set is initialized
+	for _, g := range flagGroups {
+		for _, name := range g.flags {
+			if cmd.Flags().Lookup(name) == nil && !exempt[name] {
+				stale = append(stale, name)
+			}
+		}
+	}
+	if len(stale) > 0 {
+		t.Errorf("flagGroups references flags not defined on the command: %v\nRemove them from help.go", stale)
 	}
 }
