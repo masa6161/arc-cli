@@ -31,16 +31,6 @@ func (w *Worktree) Remove() error {
 	return nil
 }
 
-// GetRoot returns the root directory of the current git repository.
-func GetRoot() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("not inside a git repository: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
 // GetCommonDir returns the git common directory (shared across worktrees).
 func GetCommonDir() (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--git-common-dir")

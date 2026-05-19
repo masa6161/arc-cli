@@ -8,54 +8,6 @@ import (
 	"testing"
 )
 
-// setupTestRepo creates a temporary git repository for testing.
-// Returns the repo path and a cleanup function.
-func setupTestRepo(t *testing.T) string {
-	t.Helper()
-
-	tmpDir := t.TempDir()
-
-	// Initialize git repo
-	cmd := exec.Command("git", "init")
-	cmd.Dir = tmpDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to init git repo: %v\n%s", err, out)
-	}
-
-	// Configure git user for commits
-	cmd = exec.Command("git", "config", "user.email", "test@test.com")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("failed to set git email: %v", err)
-	}
-
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("failed to set git name: %v", err)
-	}
-
-	// Create initial commit
-	testFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	cmd = exec.Command("git", "add", ".")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("failed to git add: %v", err)
-	}
-
-	cmd = exec.Command("git", "commit", "-m", "initial commit")
-	cmd.Dir = tmpDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to git commit: %v\n%s", err, out)
-	}
-
-	return tmpDir
-}
-
 func TestWorktree_Remove_EmptyPath(t *testing.T) {
 	w := &Worktree{Path: ""}
 	err := w.Remove()
@@ -199,56 +151,6 @@ func TestCreateWorktree_BranchWithSlashes(t *testing.T) {
 	}
 	if !strings.Contains(wt.Path, "review-feature-test-branch-") {
 		t.Errorf("worktree path format unexpected: %s", wt.Path)
-	}
-}
-
-func TestGetRoot_InGitRepo(t *testing.T) {
-	repoDir := setupTestRepo(t)
-
-	origDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get current dir: %v", err)
-	}
-	if err := os.Chdir(repoDir); err != nil {
-		t.Fatalf("failed to change to repo dir: %v", err)
-	}
-	defer os.Chdir(origDir)
-
-	root, err := GetRoot()
-	if err != nil {
-		t.Fatalf("GetRoot failed: %v", err)
-	}
-
-	// Resolve symlinks for comparison (macOS /var -> /private/var)
-	expectedRoot, err := filepath.EvalSymlinks(repoDir)
-	if err != nil {
-		t.Fatalf("failed to resolve symlinks: %v", err)
-	}
-	actualRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		t.Fatalf("failed to resolve symlinks: %v", err)
-	}
-
-	if actualRoot != expectedRoot {
-		t.Errorf("expected root %s, got %s", expectedRoot, actualRoot)
-	}
-}
-
-func TestGetRoot_NotInGitRepo(t *testing.T) {
-	tmpDir := t.TempDir() // Not a git repo
-
-	origDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get current dir: %v", err)
-	}
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("failed to change dir: %v", err)
-	}
-	defer os.Chdir(origDir)
-
-	_, err = GetRoot()
-	if err == nil {
-		t.Error("expected error when not in git repo")
 	}
 }
 
