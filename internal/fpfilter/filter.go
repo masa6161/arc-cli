@@ -128,7 +128,7 @@ func agreementBonus(reviewerCount, totalReviewers int) int {
 	}
 }
 
-func (f *Filter) Apply(ctx context.Context, grouped domain.GroupedFindings, priorFeedback string, totalReviewers int) *Result {
+func (f *Filter) Apply(ctx context.Context, grouped domain.GroupedFindings, totalReviewers int) *Result {
 	start := time.Now()
 
 	if len(grouped.Findings) == 0 {
@@ -162,7 +162,7 @@ func (f *Filter) Apply(ctx context.Context, grouped domain.GroupedFindings, prio
 		return skippedResult(grouped, start, "request marshal failed: "+err.Error())
 	}
 
-	prompt := buildPromptWithFeedback(fpEvaluationPrompt, priorFeedback)
+	prompt := fpEvaluationPrompt
 	execResult, err := ag.ExecuteSummary(ctx, prompt, payload)
 	if err != nil {
 		if ctx.Err() != nil {

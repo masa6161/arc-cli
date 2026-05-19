@@ -18,26 +18,6 @@ func TestFilter_New(t *testing.T) {
 	}
 }
 
-func TestBuildPromptWithFeedback(t *testing.T) {
-	feedback := "User said the null check is intentional"
-	prompt := buildPromptWithFeedback(fpEvaluationPrompt, feedback)
-
-	if !strings.Contains(prompt, "Prior Feedback Context") {
-		t.Error("prompt should contain Prior Feedback Context section")
-	}
-	if !strings.Contains(prompt, feedback) {
-		t.Error("prompt should contain the feedback text")
-	}
-}
-
-func TestBuildPromptWithoutFeedback(t *testing.T) {
-	prompt := buildPromptWithFeedback(fpEvaluationPrompt, "")
-
-	if strings.Contains(prompt, "Prior Feedback Context") {
-		t.Error("prompt should not contain Prior Feedback Context when feedback is empty")
-	}
-}
-
 func TestFPPrompt_IncludesReviewerCountGuidance(t *testing.T) {
 	if !strings.Contains(fpEvaluationPrompt, "reviewer_count") {
 		t.Error("prompt should reference reviewer_count field")
@@ -137,33 +117,15 @@ func TestFindingInput_IncludesReviewerCount(t *testing.T) {
 	}
 }
 
-func TestBuildPromptWithStructuredFeedback(t *testing.T) {
-	feedback := `- DISMISSED: "Non-atomic merge of shared map" -- protected by caller mutex (by @alice)
-- FIXED: "Unchecked error from db.Connect()" -- fixed in commit abc123 (by @bob)
-- INTENTIONAL: "Graph writes outside SQL transaction" -- intentional ordering (by @alice)`
-
-	prompt := buildPromptWithFeedback(fpEvaluationPrompt, feedback)
-
-	// Structured content preserved
-	if !strings.Contains(prompt, "DISMISSED") {
-		t.Error("prompt should contain DISMISSED status")
-	}
-	if !strings.Contains(prompt, "Non-atomic merge") {
-		t.Error("prompt should preserve specific finding description")
-	}
-
-	// Matching instructions present
-	if !strings.Contains(prompt, "semantic match") {
-		t.Error("prompt should contain semantic matching guidance")
-	}
-	if !strings.Contains(prompt, "fp_score 90-100") {
-		t.Error("prompt should specify fp_score range for DISMISSED matches")
-	}
-}
-
-func TestFPPrompt_IncludesPriorFeedbackCheck(t *testing.T) {
-	if !strings.Contains(fpEvaluationPrompt, "previously discussed") {
-		t.Error("base prompt should reference checking prior feedback")
+func TestFPPrompt_DoesNotReferencePriorFeedback(t *testing.T) {
+	for _, disallowed := range []string{
+		"previously discussed",
+		"Prior Feedback",
+		"prior feedback",
+	} {
+		if strings.Contains(fpEvaluationPrompt, disallowed) {
+			t.Errorf("prompt should not reference %q", disallowed)
+		}
 	}
 }
 
@@ -199,7 +161,7 @@ func TestApply_EmptyFindings(t *testing.T) {
 		Findings: []domain.FindingGroup{},
 	}
 
-	result := f.Apply(context.Background(), grouped, "", 0)
+	result := f.Apply(context.Background(), grouped, 0)
 
 	if result == nil {
 		t.Fatal("Apply returned nil")
@@ -223,7 +185,7 @@ func TestApply_EmptyFindings_WithTotalReviewers(t *testing.T) {
 	grouped := domain.GroupedFindings{
 		Findings: []domain.FindingGroup{},
 	}
-	result := f.Apply(context.Background(), grouped, "", 5)
+	result := f.Apply(context.Background(), grouped, 5)
 	if result == nil {
 		t.Fatal("Apply returned nil")
 	}
@@ -242,7 +204,7 @@ func TestApply_EmptyFindingsPreservesInfo(t *testing.T) {
 		},
 	}
 
-	result := f.Apply(context.Background(), grouped, "", 0)
+	result := f.Apply(context.Background(), grouped, 0)
 
 	if len(result.Grouped.Info) != 2 {
 		t.Errorf("expected 2 info items preserved, got %d", len(result.Grouped.Info))

@@ -1,36 +1,5 @@
 package fpfilter
 
-import "fmt"
-
-const priorFeedbackSection = `
-
-## Prior Feedback Context
-
-The following findings were previously discussed on this PR:
-
-%s
-
-## How to Use Prior Feedback
-
-For EACH finding you evaluate, check the list above for a semantic match (same technical issue, even if worded differently):
-- Matches a DISMISSED or INTENTIONAL item → assign fp_score 90-100
-- Matches a FIXED item → assign fp_score 85-95 (same specific instance, not just the same category of bug in a different location)
-- Matches an ACKNOWLEDGED item → note in reasoning but score on technical merit
-- No match → score purely on merit using the criteria above
-
-"Semantic match" means the same underlying technical issue. For example:
-- "non-atomic map merge" and "race condition in shared map update" are the same issue
-- "concurrent session overwrites" and "session history can be truncated" are the same issue
-`
-
-// buildPromptWithFeedback appends prior feedback context to the base prompt if provided.
-func buildPromptWithFeedback(basePrompt, priorFeedback string) string {
-	if priorFeedback == "" {
-		return basePrompt
-	}
-	return basePrompt + fmt.Sprintf(priorFeedbackSection, priorFeedback)
-}
-
 const fpEvaluationPrompt = `# False Positive Evaluator & Severity Triage
 
 You are an expert code reviewer evaluating findings to determine which are likely false positives and assigning severity for triage.
@@ -46,13 +15,12 @@ JSON with "findings" array, each containing:
 
 ## Your Task
 For each finding, think step-by-step:
-1. Was this finding previously discussed on the PR? (check Prior Feedback section if present)
-2. What specific issue is being claimed?
-3. Is this a concrete bug/vulnerability or a subjective suggestion?
-4. Does the evidence support a real problem or is it speculative?
-5. Would fixing this prevent actual bugs or just change style?
-6. How many reviewers found this? (higher count = more likely real issue)
-7. What severity level best describes the impact of this finding?
+1. What specific issue is being claimed?
+2. Is this a concrete bug/vulnerability or a subjective suggestion?
+3. Does the evidence support a real problem or is it speculative?
+4. Would fixing this prevent actual bugs or just change style?
+5. How many reviewers found this? (higher count = more likely real issue)
+6. What severity level best describes the impact of this finding?
 
 Then assign:
 - fp_score: 0-100 (100 = definitely false positive, 0 = definitely real issue)
