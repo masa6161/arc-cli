@@ -78,7 +78,6 @@ type RoleModels struct {
 	Summarizer   *ModelSpec `yaml:"summarizer"`
 	FPFilter     *ModelSpec `yaml:"fp_filter"`
 	CrossCheck   *ModelSpec `yaml:"cross_check"`
-	PRFeedback   *ModelSpec `yaml:"pr_feedback"`
 }
 
 // ModelsConfig holds the models configuration section.
@@ -118,7 +117,6 @@ type Config struct {
 	AutoPhase              *bool            `yaml:"auto_phase"`
 	Filters                FilterConfig     `yaml:"filters"`
 	FPFilter               FPFilterConfig   `yaml:"fp_filter"`
-	PRFeedback             PRFeedbackConfig `yaml:"pr_feedback"`
 	CrossCheck             CrossCheckConfig `yaml:"cross_check"`
 	Models                 ModelsConfig     `yaml:"models"`
 	MinLargeDiffReviewers  *int             `yaml:"min_large_diff_reviewers"`
@@ -141,12 +139,6 @@ type FPFilterConfig struct {
 	Agent     *string `yaml:"agent"`
 	Model     *string `yaml:"model"`
 	Effort    *string `yaml:"effort"`
-}
-
-// PRFeedbackConfig holds PR feedback summarization settings.
-type PRFeedbackConfig struct {
-	Enabled *bool   `yaml:"enabled"`
-	Agent   *string `yaml:"agent"`
 }
 
 // FilterConfig holds filter-related configuration.
@@ -236,17 +228,15 @@ func (c *Config) validatePatterns() error {
 	return nil
 }
 
-var knownTopLevelKeys = []string{"reviewers", "large_diff_reviewers", "medium_diff_reviewers", "small_diff_reviewers", "concurrency", "base", "timeout", "retries", "fetch", "reviewer_agent", "reviewer_agents", "arch_reviewer_agent", "diff_reviewer_agents", "summarizer_agent", "reviewer_model", "summarizer_model", "summarizer_timeout", "fp_filter_timeout", "cross_check_timeout", "guidance_file", "auto_phase", "filters", "fp_filter", "pr_feedback", "cross_check", "models", "min_large_diff_reviewers", "min_medium_diff_reviewers", "role_prompts"}
+var knownTopLevelKeys = []string{"reviewers", "large_diff_reviewers", "medium_diff_reviewers", "small_diff_reviewers", "concurrency", "base", "timeout", "retries", "fetch", "reviewer_agent", "reviewer_agents", "arch_reviewer_agent", "diff_reviewer_agents", "summarizer_agent", "reviewer_model", "summarizer_model", "summarizer_timeout", "fp_filter_timeout", "cross_check_timeout", "guidance_file", "auto_phase", "filters", "fp_filter", "cross_check", "models", "min_large_diff_reviewers", "min_medium_diff_reviewers", "role_prompts"}
 
 var knownFPFilterKeys = []string{"enabled", "threshold", "triage", "show_noise", "agent", "model", "effort"}
 
 var knownModelsKeys = []string{"defaults", "sizes", "agents"}
 
-var knownRoleKeys = []string{"reviewer", "arch_reviewer", "diff_reviewer", "summarizer", "fp_filter", "cross_check", "pr_feedback"}
+var knownRoleKeys = []string{"reviewer", "arch_reviewer", "diff_reviewer", "summarizer", "fp_filter", "cross_check"}
 
 var knownModelSpecKeys = []string{"model", "effort"}
-
-var knownPRFeedbackKeys = []string{"enabled", "agent"}
 
 var knownCrossCheckKeys = []string{"enabled", "agent", "model"}
 
@@ -292,18 +282,6 @@ func checkUnknownKeys(data []byte) []string {
 			if !slices.Contains(knownFPFilterKeys, key) {
 				warning := fmt.Sprintf("unknown key %q in fp_filter section of %s", key, ConfigFileName)
 				if suggestion := findSimilar(key, knownFPFilterKeys); suggestion != "" {
-					warning += fmt.Sprintf(" (did you mean %q?)", suggestion)
-				}
-				warnings = append(warnings, warning)
-			}
-		}
-	}
-
-	if prFeedback, ok := raw["pr_feedback"].(map[string]any); ok {
-		for key := range prFeedback {
-			if !slices.Contains(knownPRFeedbackKeys, key) {
-				warning := fmt.Sprintf("unknown key %q in pr_feedback section of %s", key, ConfigFileName)
-				if suggestion := findSimilar(key, knownPRFeedbackKeys); suggestion != "" {
 					warning += fmt.Sprintf(" (did you mean %q?)", suggestion)
 				}
 				warnings = append(warnings, warning)
@@ -554,9 +532,6 @@ func (r *ResolvedConfig) ValidateAll() []string {
 	if r.FPThreshold < 1 || r.FPThreshold > 100 {
 		errs = append(errs, fmt.Sprintf("fp_filter.threshold must be 1-100, got %d", r.FPThreshold))
 	}
-	if r.PRFeedbackAgent != "" && !slices.Contains(agent.SupportedAgents, r.PRFeedbackAgent) {
-		errs = append(errs, fmt.Sprintf("pr_feedback.agent must be one of %v, got %q", agent.SupportedAgents, r.PRFeedbackAgent))
-	}
 	if r.CrossCheckAgent != "" {
 		for _, tok := range strings.Split(r.CrossCheckAgent, ",") {
 			tok = strings.TrimSpace(tok)
@@ -792,7 +767,6 @@ func checkAllSpecEfforts(rm RoleModels, prefix string, valid []string, errs *[]s
 	checkOne(rm.Summarizer, "summarizer")
 	checkOne(rm.FPFilter, "fp_filter")
 	checkOne(rm.CrossCheck, "cross_check")
-	checkOne(rm.PRFeedback, "pr_feedback")
 }
 
 // Validate checks that all resolved config values are semantically valid.
@@ -822,8 +796,6 @@ var Defaults = ResolvedConfig{
 	CrossCheckTimeout:      5 * time.Minute,
 	FPFilterEnabled:        true,
 	FPThreshold:            75,
-	PRFeedbackEnabled:      true,
-	PRFeedbackAgent:        "", // empty means use summarizer agent
 	CrossCheckEnabled:      true,
 	CrossCheckAgent:        "", // empty means use summarizer agent
 	CrossCheckModel:        "", // empty: must resolve via models config or ValidateRuntime will error
@@ -871,8 +843,6 @@ type ResolvedConfig struct {
 	FPFilterEffort         string
 	FPFilterModelFromCLI   bool // true when fp-filter-model set via flag or env
 	FPFilterEffortFromCLI  bool // true when fp-filter-effort set via flag or env
-	PRFeedbackEnabled      bool
-	PRFeedbackAgent        string
 	CrossCheckEnabled      bool
 	CrossCheckAgent        string // empty means use summarizer agent
 	CrossCheckModel        string // empty means use summarizer model
@@ -918,8 +888,6 @@ type FlagState struct {
 	GuidanceFileSet        bool
 	NoFPFilterSet          bool
 	FPThresholdSet         bool
-	NoPRFeedbackSet        bool
-	PRFeedbackAgentSet     bool
 	NoCrossCheckSet        bool
 	CrossCheckAgentSet     bool
 	CrossCheckModelSet     bool
@@ -981,10 +949,6 @@ type EnvState struct {
 	FPFilterSet            bool
 	FPThreshold            int
 	FPThresholdSet         bool
-	PRFeedbackEnabled      bool
-	PRFeedbackEnabledSet   bool
-	PRFeedbackAgent        string
-	PRFeedbackAgentSet     bool
 	CrossCheckEnabled      bool
 	CrossCheckEnabledSet   bool
 	CrossCheckAgent        string
@@ -1189,24 +1153,6 @@ func LoadEnvState() (EnvState, []string) {
 		}
 	}
 
-	if v := os.Getenv("ARC_PR_FEEDBACK"); v != "" {
-		switch v {
-		case "true", "1":
-			state.PRFeedbackEnabled = true
-			state.PRFeedbackEnabledSet = true
-		case "false", "0":
-			state.PRFeedbackEnabled = false
-			state.PRFeedbackEnabledSet = true
-		default:
-			warnings = append(warnings, fmt.Sprintf("ARC_PR_FEEDBACK=%q is not a valid boolean (use true/false/1/0), ignoring", v))
-		}
-	}
-
-	if v := os.Getenv("ARC_PR_FEEDBACK_AGENT"); v != "" {
-		state.PRFeedbackAgent = v
-		state.PRFeedbackAgentSet = true
-	}
-
 	if v := os.Getenv("ARC_CROSS_CHECK"); v != "" {
 		switch v {
 		case "true", "1":
@@ -1395,12 +1341,6 @@ func Resolve(cfg *Config, envState EnvState, flagState FlagState, flagValues Res
 		if cfg.FPFilter.Effort != nil {
 			result.FPFilterEffort = *cfg.FPFilter.Effort
 		}
-		if cfg.PRFeedback.Enabled != nil {
-			result.PRFeedbackEnabled = *cfg.PRFeedback.Enabled
-		}
-		if cfg.PRFeedback.Agent != nil {
-			result.PRFeedbackAgent = *cfg.PRFeedback.Agent
-		}
 		if cfg.CrossCheckTimeout != nil {
 			result.CrossCheckTimeout = cfg.CrossCheckTimeout.AsDuration()
 		}
@@ -1502,12 +1442,6 @@ func Resolve(cfg *Config, envState EnvState, flagState FlagState, flagValues Res
 	if envState.FPFilterEffortSet {
 		result.FPFilterEffort = envState.FPFilterEffort
 	}
-	if envState.PRFeedbackEnabledSet {
-		result.PRFeedbackEnabled = envState.PRFeedbackEnabled
-	}
-	if envState.PRFeedbackAgentSet {
-		result.PRFeedbackAgent = envState.PRFeedbackAgent
-	}
 	if envState.CrossCheckEnabledSet {
 		result.CrossCheckEnabled = envState.CrossCheckEnabled
 	}
@@ -1604,12 +1538,6 @@ func Resolve(cfg *Config, envState EnvState, flagState FlagState, flagValues Res
 	}
 	if flagState.FPFilterEffortSet {
 		result.FPFilterEffort = flagValues.FPFilterEffort
-	}
-	if flagState.NoPRFeedbackSet {
-		result.PRFeedbackEnabled = flagValues.PRFeedbackEnabled
-	}
-	if flagState.PRFeedbackAgentSet {
-		result.PRFeedbackAgent = flagValues.PRFeedbackAgent
 	}
 	if flagState.NoCrossCheckSet {
 		result.CrossCheckEnabled = flagValues.CrossCheckEnabled

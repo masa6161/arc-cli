@@ -17,7 +17,6 @@ const (
 	RoleSummarizer   = "summarizer"
 	RoleFPFilter     = "fp_filter"
 	RoleCrossCheck   = "cross_check"
-	RolePRFeedback   = "pr_feedback"
 )
 
 // Spec is the resolved model + effort pair that agent constructors receive.
@@ -186,8 +185,6 @@ func pickSpec(rm *config.RoleModels, role string) Spec {
 		src = rm.FPFilter
 	case RoleCrossCheck:
 		src = rm.CrossCheck
-	case RolePRFeedback:
-		src = rm.PRFeedback
 	}
 	if src == nil {
 		return Spec{}

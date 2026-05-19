@@ -1396,18 +1396,6 @@ func TestLoadEnvState_FPFilterTrue_NoDeprecatedWarning(t *testing.T) {
 	}
 }
 
-func TestLoadEnvState_MalformedPRFeedback(t *testing.T) {
-	clearARCEnv(t)
-	t.Setenv("ARC_PR_FEEDBACK", "maybe")
-	state, warnings := LoadEnvState()
-	if state.PRFeedbackEnabledSet {
-		t.Error("expected PRFeedbackEnabledSet to be false for invalid value")
-	}
-	if !hasWarningContaining(warnings, "ARC_PR_FEEDBACK") {
-		t.Errorf("expected warning about ARC_PR_FEEDBACK, got %v", warnings)
-	}
-}
-
 func TestLoadEnvState_MalformedFPThreshold_NotInt(t *testing.T) {
 	clearARCEnv(t)
 	t.Setenv("ARC_FP_THRESHOLD", "abc")
@@ -1630,11 +1618,6 @@ func TestResolvedConfig_Validate_Errors(t *testing.T) {
 			wantMsg: "fp_filter.threshold must be 1-100",
 		},
 		{
-			name:    "invalid pr feedback agent",
-			modify:  func(c *ResolvedConfig) { c.PRFeedbackAgent = "bad" },
-			wantMsg: "pr_feedback.agent must be one of",
-		},
-		{
 			name:    "invalid cross_check agent",
 			modify:  func(c *ResolvedConfig) { c.CrossCheckAgent = "bogus" },
 			wantMsg: "cross_check.agent contains unsupported agent",
@@ -1672,14 +1655,6 @@ func TestResolvedConfig_Validate_MultipleErrors(t *testing.T) {
 	msg := err.Error()
 	if !strings.Contains(msg, "reviewers") || !strings.Contains(msg, "retries") {
 		t.Errorf("expected both reviewers and retries errors, got: %v", err)
-	}
-}
-
-func TestResolvedConfig_Validate_EmptyPRFeedbackAgent(t *testing.T) {
-	cfg := Defaults
-	cfg.PRFeedbackAgent = "" // empty means use summarizer agent, should be valid
-	if err := cfg.Validate(); err != nil {
-		t.Fatalf("expected empty pr_feedback.agent to be valid, got: %v", err)
 	}
 }
 
@@ -2105,7 +2080,6 @@ func TestConfig_ModelsSection_Parses(t *testing.T) {
     summarizer:     { model: gpt-5.4,      effort: high }
     fp_filter:      { model: gpt-5.4-mini, effort: low }
     cross_check:    { model: gpt-5.4,      effort: medium }
-    pr_feedback:    { model: gpt-5.4-mini }
   sizes:
     small:
       reviewer: { model: gpt-5.4-mini, effort: low }
@@ -2175,13 +2149,6 @@ func TestConfig_ModelsSection_Parses(t *testing.T) {
 	if m.Defaults.CrossCheck == nil {
 		t.Fatal("defaults.cross_check should not be nil")
 	}
-	if m.Defaults.PRFeedback == nil {
-		t.Fatal("defaults.pr_feedback should not be nil")
-	}
-	if m.Defaults.PRFeedback.Effort != "" {
-		t.Errorf("defaults.pr_feedback.effort: expected empty, got %q", m.Defaults.PRFeedback.Effort)
-	}
-
 	// sizes
 	small, ok := m.Sizes[domain.SizeSmall]
 	if !ok {
