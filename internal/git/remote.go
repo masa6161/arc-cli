@@ -1,4 +1,4 @@
-// Package git provides git operations including worktree management.
+// Package git provides git operations including diff generation, branch management, and remote handling.
 package git
 
 import (
