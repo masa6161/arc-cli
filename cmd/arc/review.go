@@ -181,8 +181,8 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 	// ResolvedConfig.ValidateRuntime for both auto-phase and --phase large.
 
 	// Verbose: log the effective model/effort matrix for all roles once, up-front.
-	// fp_filter and pr_feedback specs are resolved later in the flow, so we
-	// re-invoke Resolve here (pure, cheap) solely for display purposes.
+	// fp_filter spec is resolved later in the flow, so we re-invoke Resolve
+	// here (pure, cheap) solely for display purposes.
 	if opts.Verbose {
 		fpAgentLog := opts.FPFilterAgent
 		if fpAgentLog == "" {

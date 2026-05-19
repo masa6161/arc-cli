@@ -140,13 +140,13 @@ When `GetGitDiff` fails (e.g., base ref doesn't exist), all retries repeat the s
 
 ---
 
-### B6. [PROPOSAL] Worktree cleanup on crash
+### B6. ~~[PROPOSAL] Worktree cleanup on crash~~ [RESOLVED]
 **Source**: Systems Expert
-**Files**: `internal/git/worktree.go`
+**Files**: ~~`internal/git/worktree.go`~~ (削除済み)
 
-SIGKILL or crashes leak worktrees in `.worktrees/`. They accumulate with random IDs.
+~~SIGKILL or crashes leak worktrees in `.worktrees/`. They accumulate with random IDs.~~
 
-**Recommendation**: Add startup cleanup via `git worktree prune` or age-based pruning.
+**Resolution**: Worktree 機能は Issue #52 で完全削除されたため、この提案は不要になった。
 
 ---
 
@@ -162,19 +162,19 @@ The core false positive detection logic (`Filter()`, `Apply()`) has no unit test
 
 ---
 
-### C2. [ISSUE] `github` package low coverage (31.1%)
+### C2. ~~[ISSUE] `github` package low coverage (31.1%)~~ [RESOLVED]
 **Source**: Automation Expert
-**Files**: `internal/github/pr.go`
+**Files**: ~~`internal/github/pr.go`~~ (削除済み)
 
-Only `ParseCIChecks` and `classifyGHError` (pure functions) are tested. All `gh` CLI interaction functions are untested. The parsing/formatting logic around them could be extracted and tested.
+**Resolution**: `internal/github/` パッケージは Issue #52 で完全削除された。
 
 ---
 
-### C3. [ISSUE] `feedback` package low coverage (16.7%)
+### C3. ~~[ISSUE] `feedback` package low coverage (16.7%)~~ [RESOLVED]
 **Source**: Automation Expert
-**Files**: `internal/feedback/`
+**Files**: ~~`internal/feedback/`~~ (削除済み)
 
-PR context fetching and summarization are largely untested.
+**Resolution**: `internal/feedback/` パッケージは Issue #52 で完全削除された。
 
 ---
 
@@ -277,11 +277,11 @@ The `Long` description is Codex-centric despite supporting codex, claude, and ge
 
 ---
 
-### D4. [PROPOSAL] Add `-p` short flag for `--pr`
+### D4. ~~[PROPOSAL] Add `-p` short flag for `--pr`~~ [RESOLVED]
 **Source**: UX Expert
-**Files**: `cmd/acr/main.go:97-98`
+**Files**: ~~`cmd/acr/main.go:97-98`~~
 
-`--pr` has no short form despite being one of the most common usage patterns. `acr -p 123` is much more ergonomic.
+**Resolution**: `--pr` フラグは Issue #52 で完全削除されたため、この提案は不要になった。
 
 ---
 

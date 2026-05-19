@@ -24,12 +24,12 @@ All PRs must include evidence of a successful ARC run against the
 contributed code using the repository's `.arc.yaml` configuration
 (which uses all three agent types with 6 reviewers):
 
-    arc --pr <your-pr-number>
+    arc
 
 If you don't have access to all three agents (codex, claude, gemini),
 you must review with at least 2. Override with:
 
-    arc --pr <your-pr-number> --reviewer-agent codex,claude
+    arc --reviewer-agent codex,claude
 
 ## Project Structure
 
