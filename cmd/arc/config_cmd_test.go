@@ -341,13 +341,11 @@ func TestConfigShow_DisplaysAllFields(t *testing.T) {
 		"large_diff_reviewers:", "medium_diff_reviewers:", "small_diff_reviewers:",
 		"summarizer_timeout:", "fp_filter_timeout:", "cross_check_timeout:",
 		"fp_filter.enabled:", "fp_filter.threshold:",
-		"pr_feedback.enabled:", "pr_feedback.agent:",
 		"cross_check.enabled:", "cross_check.agent:", "cross_check.model:",
 		"guidance_file:",
 		"models.defaults.reviewer:", "models.defaults.arch_reviewer:",
 		"models.defaults.diff_reviewer:", "models.defaults.summarizer:",
 		"models.defaults.fp_filter:", "models.defaults.cross_check:",
-		"models.defaults.pr_feedback:",
 		"models.sizes:", "models.agents:",
 	}
 
@@ -411,7 +409,7 @@ func TestConfigShow_FallbackDisplay(t *testing.T) {
 	if !strings.Contains(output, "(agent default)") {
 		t.Errorf("expected model fallback text.\nOutput:\n%s", output)
 	}
-	// pr_feedback.agent and cross_check.agent fallback
+	// cross_check.agent fallback
 	if !strings.Contains(output, "(same as summarizer_agent)") {
 		t.Errorf("expected agent fallback text.\nOutput:\n%s", output)
 	}

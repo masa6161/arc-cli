@@ -150,15 +150,6 @@ func newConfigShowCmd() *cobra.Command {
 			}
 			fmt.Fprintln(out)
 
-			// PR feedback
-			fmt.Fprintf(out, "  %-32s %t\n", "pr_feedback.enabled:", resolved.PRFeedbackEnabled)
-			if resolved.PRFeedbackAgent != "" {
-				fmt.Fprintf(out, "  %-32s %s\n", "pr_feedback.agent:", resolved.PRFeedbackAgent)
-			} else {
-				fmt.Fprintf(out, "  %-32s %s\n", "pr_feedback.agent:", "(same as summarizer_agent)")
-			}
-			fmt.Fprintln(out)
-
 			// Cross-check
 			fmt.Fprintf(out, "  %-32s %t\n", "cross_check.enabled:", resolved.CrossCheckEnabled)
 			if resolved.CrossCheckAgent != "" {
@@ -188,7 +179,6 @@ func newConfigShowCmd() *cobra.Command {
 			fmt.Fprintf(out, "  %-32s %s\n", "models.defaults.summarizer:", formatModelSpec(resolved.Models.Defaults.Summarizer))
 			fmt.Fprintf(out, "  %-32s %s\n", "models.defaults.fp_filter:", formatModelSpec(resolved.Models.Defaults.FPFilter))
 			fmt.Fprintf(out, "  %-32s %s\n", "models.defaults.cross_check:", formatModelSpec(resolved.Models.Defaults.CrossCheck))
-			fmt.Fprintf(out, "  %-32s %s\n", "models.defaults.pr_feedback:", formatModelSpec(resolved.Models.Defaults.PRFeedback))
 			if len(resolved.Models.Sizes) > 0 {
 				fmt.Fprintf(out, "  %-32s (%d entries)\n", "models.sizes:", len(resolved.Models.Sizes))
 			} else {
@@ -277,11 +267,6 @@ func newConfigInitCmd() *cobra.Command {
 #   agent: ""    # FP filter/triage agent (default: same as summarizer_agent)
 #   model: ""    # FP filter/triage model (default: same as summarizer_model)
 #   effort: ""   # FP filter/triage effort (default: same as summarizer)
-
-# PR feedback summarization
-# pr_feedback:
-#   enabled: true
-#   agent: ""
 
 # Cross-check for grouped review consistency (model is REQUIRED when enabled)
 # cross_check:

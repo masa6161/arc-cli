@@ -13,12 +13,8 @@ type ReviewOpts struct {
 
 	// CLI-only flags (not part of config resolution)
 	Verbose         bool
-	PRNumber        string // Explicit --pr flag value (empty if not set)
-	DetectedPR      string // Auto-detected or explicit PR number for feedback summarization
-	WorktreeBranch  string // Explicit --worktree-branch flag value
 	UseRefFile      bool
 	ExcludePatterns []string
-	WorkDir         string // Worktree path (empty = current directory)
 	Phase           string // Review phase: "small", "medium", "large" (empty = auto-phase / flat)
 	Format          string // Output format: "text" (default) or "json"
 	// AutoPhase is inherited from the embedded ResolvedConfig field.

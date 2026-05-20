@@ -15,7 +15,7 @@ Claude Code 固有の補足ガイドです。
 cmd/arc/                   # CLI エントリポイントとサブコマンド
   main.go                  # CLI エントリポイント、フラグ解析、cobra ルートコマンド
   review.go                # コアレビューオーケストレーション（executeReview）
-  review_opts.go           # ReviewOpts 構造体（解決済み設定 + CLI フラグのバンドル）
+  review_opts.go           # ReviewOpts 構造体（解決済み設定のバンドル）
   config_cmd.go            # `arc config` サブコマンド（.arc.yaml の初期化/表示）
   help.go                  # カスタムヘルプフォーマット（フラググループ）
   helpers.go               # CLI ヘルパー関数（exit code ラッパー、stderr フォーマット）
@@ -71,11 +71,6 @@ internal/
     filter.go              # LLM ベースの誤検出検出と重要度トリアージ（blocking/advisory/noise）
     prompt.go              # FP フィルターおよびトリアージプロンプトテンプレート
 
-  feedback/                # PR フィードバック要約
-    fetch.go               # gh CLI 経由で PR 説明とコメントを取得
-    summarizer.go          # LLM ベースの PR ディスカッション要約
-    prompt.go              # フィードバック要約プロンプトテンプレート
-
   runner/                  # レビュー実行エンジン
     runner.go              # 並列レビュワーオーケストレーション
     report.go              # レポートレンダリング（ターミナル + markdown）
@@ -86,12 +81,8 @@ internal/
     summarizer.go          # エージェント実行と出力解析のオーケストレーション
     crosscheck.go          # サマライザー出力のクロスチェック検証
 
-  github/                  # gh CLI 経由の GitHub PR 操作
-    pr.go                  # PR 番号取得、ベースブランチ解決、gh CLI 可用性チェック
-    fork.go                # フォーク参照解決
-
   git/                     # Git 操作
-    worktree.go            # 一時ワークツリー管理
+    repo.go                # リポジトリルート取得（GetRoot）
     diff.go                # diff 生成、ブランチ更新、diff サイズ分類
     diffsplit.go           # unified diff のファイル別分割
     remote.go              # リモート管理（追加、fetch、URL 操作）

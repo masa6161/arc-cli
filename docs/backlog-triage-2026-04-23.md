@@ -75,7 +75,7 @@ PR #4〜#6 の開発サイクル中に解決済みだが、バックログの持
 
 対象: `cmd/acr/config_cmd.go:30-68`
 
-現在表示されている14フィールド: `reviewers`, `concurrency`, `base`, `timeout`, `retries`, `fetch`, `reviewer_agents`, `summarizer_agent`, `summarizer_timeout`, `fp_filter_timeout`, `fp_filter.enabled`, `fp_filter.threshold`, `pr_feedback.enabled`, `pr_feedback.agent`
+現在表示されている12フィールド: `reviewers`, `concurrency`, `base`, `timeout`, `retries`, `fetch`, `reviewer_agents`, `summarizer_agent`, `summarizer_timeout`, `fp_filter_timeout`, `fp_filter.enabled`, `fp_filter.threshold`
 
 追加すべきフィールド:
 - `auto_phase` (ResolvedConfig.AutoPhase, default true)

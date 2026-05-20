@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/masa6161/arc-cli/internal/agent"
 	"github.com/masa6161/arc-cli/internal/domain"
-	"github.com/masa6161/arc-cli/internal/feedback"
 	"github.com/masa6161/arc-cli/internal/filter"
 	"github.com/masa6161/arc-cli/internal/fpfilter"
 	"github.com/masa6161/arc-cli/internal/git"
@@ -63,7 +61,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		// Skip when the base ref is relative to HEAD (e.g., HEAD~3) since
 		// fast-forwarding would change what those refs resolve to.
 		if !git.IsRelativeRef(opts.Base) {
-			branchResult := git.UpdateCurrentBranch(ctx, opts.WorkDir)
+			branchResult := git.UpdateCurrentBranch(ctx, "")
 			if branchResult.Updated && opts.Verbose {
 				logger.Logf(terminal.StyleDim, "Updated branch %s from origin", branchResult.BranchName)
 			}
@@ -73,7 +71,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		}
 
 		// Fetch base ref
-		result := git.FetchRemoteRef(ctx, opts.Base, opts.WorkDir)
+		result := git.FetchRemoteRef(ctx, opts.Base, "")
 		resolvedBaseRef = result.ResolvedRef
 		if result.FetchAttempted && !result.RefResolved {
 			logger.Logf(terminal.StyleWarning, "Failed to fetch %s from origin, comparing against local %s (may be stale)", opts.Base, resolvedBaseRef)
@@ -92,7 +90,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 	var diffFileCount, diffLineCount int
 	var diffSizeClassified bool
 	var classifyErr error
-	diffSize, diffFileCount, diffLineCount, classifyErr = git.ClassifyDiffSize(ctx, resolvedBaseRef, opts.WorkDir)
+	diffSize, diffFileCount, diffLineCount, classifyErr = git.ClassifyDiffSize(ctx, resolvedBaseRef, "")
 	if classifyErr == nil {
 		sizeStr = diffSize.String()
 		diffSizeClassified = true
@@ -183,10 +181,9 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 	// ResolvedConfig.ValidateRuntime for both auto-phase and --phase large.
 
 	// Verbose: log the effective model/effort matrix for all roles once, up-front.
-	// fp_filter and pr_feedback specs are resolved later in the flow, so we
-	// re-invoke Resolve here (pure, cheap) solely for display purposes.
+	// fp_filter spec is resolved later in the flow, so we re-invoke Resolve
+	// here (pure, cheap) solely for display purposes.
 	if opts.Verbose {
-		cliSumModelLog, legacySumModelLog := cliOrLegacy(opts.SummarizerModel, opts.SummarizerModelFromCLI)
 		fpAgentLog := opts.FPFilterAgent
 		if fpAgentLog == "" {
 			fpAgentLog = opts.SummarizerAgent
@@ -204,15 +201,6 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 			cliFPModelLog, cliFPEffortLog,
 			legacyFPModelLog, legacyFPEffortLog,
 		)
-		prFeedbackAgentName := opts.PRFeedbackAgent
-		if prFeedbackAgentName == "" {
-			prFeedbackAgentName = opts.SummarizerAgent
-		}
-		prFeedbackSpecLog := modelconfig.Resolve(
-			opts.Models, sizeStr, modelconfig.RolePRFeedback, prFeedbackAgentName,
-			cliSumModelLog, "",
-			legacySumModelLog, "",
-		)
 		logger.Logf(terminal.StyleDim, "Effective model matrix (size=%s):", formatSizeStr(sizeStr))
 		for _, s := range reviewerSpecs {
 			logger.Logf(terminal.StyleDim, "  reviewer[%s]       : %s", s.Name, formatSpec(agent.AgentOptions{Model: s.Options.Model, Effort: s.Options.Effort}))
@@ -228,12 +216,11 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		// arch_reviewer / diff_reviewer rows, it is emitted alongside the
 		// "Auto-phase: grouped" line below when grouped path is confirmed.
 		logger.Logf(terminal.StyleDim, "  fp_filter         : %s", formatSpec(agent.AgentOptions{Model: fpSpecLog.Model, Effort: fpSpecLog.Effort}))
-		logger.Logf(terminal.StyleDim, "  pr_feedback       : %s", formatSpec(agent.AgentOptions{Model: prFeedbackSpecLog.Model, Effort: prFeedbackSpecLog.Effort}))
 	}
 
 	// Pre-compute the git diff once and share it across all reviewers.
 	// Always compute (even for codex-only) so we can short-circuit empty diffs.
-	diff, err := git.GetDiff(ctx, resolvedBaseRef, opts.WorkDir)
+	diff, err := git.GetDiff(ctx, resolvedBaseRef, "")
 	if err != nil {
 		logger.Logf(terminal.StyleError, "Failed to get diff: %v", err)
 		return domain.ExitError
@@ -375,7 +362,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		Timeout:         opts.Timeout,
 		Retries:         opts.Retries,
 		Verbose:         opts.Verbose,
-		WorkDir:         opts.WorkDir,
+		WorkDir:         "",
 		Guidance:        opts.Guidance,
 		UseRefFile:      opts.UseRefFile,
 		Diff:            diff,
@@ -456,56 +443,6 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 	} else {
 		logger.Logf(terminal.StyleInfo, "Starting review %s(%d reviewers, base=%s)%s",
 			terminal.Color(terminal.Dim), actualReviewers, opts.Base, terminal.Color(terminal.Reset))
-	}
-
-	// Start PR feedback summarizer in parallel with reviewers (if enabled, reviewing a PR, and FP filter is on)
-	// Skip if FP filter is disabled since the feedback summary is only consumed by the FP filter
-	var priorFeedback string
-	var feedbackWg sync.WaitGroup
-	if opts.PRFeedbackEnabled && opts.DetectedPR != "" && opts.FPFilterEnabled {
-		logger.Logf(terminal.StyleInfo, "Summarizing PR #%s feedback %s(in parallel)%s",
-			opts.DetectedPR, terminal.Color(terminal.Dim), terminal.Color(terminal.Reset))
-		feedbackWg.Add(1)
-		go func() {
-			defer feedbackWg.Done()
-
-			// Determine which agent to use for feedback summarization
-			feedbackAgentName := opts.PRFeedbackAgent
-			if feedbackAgentName == "" {
-				feedbackAgentName = opts.SummarizerAgent
-			}
-
-			cliSumModelPR, legacySumModelPR := cliOrLegacy(opts.SummarizerModel, opts.SummarizerModelFromCLI)
-			prSpec := modelconfig.Resolve(
-				opts.Models, sizeStr, modelconfig.RolePRFeedback, feedbackAgentName,
-				cliSumModelPR, "",
-				legacySumModelPR, "",
-			)
-			summarizer := feedback.NewSummarizer(feedbackAgentName, prSpec.Model, prSpec.Effort, opts.CodexHome, opts.Verbose, logger)
-			feedbackCtx, feedbackCancel := context.WithTimeout(ctx, opts.SummarizerTimeout)
-			defer feedbackCancel()
-
-			summary, err := summarizer.Summarize(feedbackCtx, opts.DetectedPR)
-			if err != nil {
-				// Distinguish feedback-specific timeout from parent context cancellation
-				if ctx.Err() != nil {
-					// Parent context was canceled (e.g., user interrupt) — don't log as timeout
-					return
-				}
-				if feedbackCtx.Err() == context.DeadlineExceeded {
-					logger.Logf(terminal.StyleWarning, "PR feedback summarizer timed out after %s", opts.SummarizerTimeout)
-					return
-				}
-				logger.Logf(terminal.StyleWarning, "PR feedback summarizer failed: %v", err)
-				return
-			}
-			if summary != "" {
-				logger.Log("PR feedback summarized", terminal.StyleSuccess)
-			} else {
-				logger.Log("No relevant PR feedback found", terminal.StyleDim)
-			}
-			priorFeedback = summary
-		}()
 	}
 
 	results, wallClock, err := r.Run(ctx)
@@ -653,9 +590,6 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		domain.BackfillPhaseReviewerCounts(&summaryResult.Grouped, aggregated, reviewerPhases)
 	}
 
-	// Wait for PR feedback summarizer to complete
-	feedbackWg.Wait()
-
 	var fpFilteredCount int
 	var noiseFindingsForDisplay []domain.FindingGroup
 	if opts.FPFilterEnabled && summaryResult.ExitCode == 0 && len(summaryResult.Grouped.Findings) > 0 && ctx.Err() == nil {
@@ -704,7 +638,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 			legacyFPModel, legacyFPEffort,
 		)
 		fpFilter := fpfilter.New(fpAgentName, fpSpec.Model, fpSpec.Effort, opts.CodexHome, opts.FPThreshold, opts.TriageEnabled, opts.Verbose, logger)
-		fpResult := fpFilter.Apply(fpCtx, summaryResult.Grouped, priorFeedback, stats.SuccessfulReviewers)
+		fpResult := fpFilter.Apply(fpCtx, summaryResult.Grouped, stats.SuccessfulReviewers)
 		fpSpinnerCancel()
 		<-fpSpinnerDone
 

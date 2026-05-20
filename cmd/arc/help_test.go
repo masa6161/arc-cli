@@ -14,7 +14,6 @@ func TestSetGroupedUsage(t *testing.T) {
 	cmd.Flags().Int("reviewers", 5, "Number of reviewers")
 	cmd.Flags().String("base", "main", "Base ref")
 	cmd.Flags().String("reviewer-agent", "codex", "Agent for reviews")
-	cmd.Flags().String("pr", "", "PR number")
 	cmd.Flags().Bool("no-config", false, "Skip config")
 	cmd.Flags().Bool("help", false, "help")
 
@@ -32,7 +31,7 @@ func TestSetGroupedUsage(t *testing.T) {
 	output := buf.String()
 
 	// Check that group headers appear
-	for _, header := range []string{"Review Settings:", "Agent Settings:", "PR Integration:", "Advanced:"} {
+	for _, header := range []string{"Review Settings:", "Agent Settings:", "Advanced:"} {
 		if !strings.Contains(output, header) {
 			t.Errorf("expected group header %q in output, got:\n%s", header, output)
 		}
@@ -110,8 +109,6 @@ func TestFlagGroupsCoverAllFlags(t *testing.T) {
 	cmd.Flags().StringVar(&guidance, "guidance", "", "")
 	cmd.Flags().StringVar(&guidanceFile, "guidance-file", "", "")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "")
-	cmd.Flags().StringVarP(&worktreeBranch, "worktree-branch", "B", "", "")
-	cmd.Flags().StringVar(&prNumber, "pr", "", "")
 	cmd.Flags().StringArrayVar(&excludePatterns, "exclude-pattern", nil, "")
 	cmd.Flags().BoolVar(&noConfig, "no-config", false, "")
 	cmd.Flags().StringVarP(&agentName, "reviewer-agent", "a", "codex", "")
@@ -119,8 +116,6 @@ func TestFlagGroupsCoverAllFlags(t *testing.T) {
 	cmd.Flags().BoolVar(&refFile, "ref-file", false, "")
 	cmd.Flags().BoolVar(&noFPFilter, "no-fp-filter", false, "")
 	cmd.Flags().IntVar(&fpThreshold, "fp-threshold", 75, "")
-	cmd.Flags().BoolVar(&noPRFeedback, "no-pr-feedback", false, "")
-	cmd.Flags().StringVar(&prFeedbackAgent, "pr-feedback-agent", "", "")
 	cmd.Flags().StringVar(&reviewerModel, "reviewer-model", "", "")
 	cmd.Flags().StringVar(&summarizerModel, "summarizer-model", "", "")
 	cmd.Flags().StringVar(&fpFilterAgentName, "fp-filter-agent", "", "")

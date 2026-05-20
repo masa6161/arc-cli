@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -15,8 +14,6 @@ import (
 	"github.com/masa6161/arc-cli/internal/agent"
 	"github.com/masa6161/arc-cli/internal/config"
 	"github.com/masa6161/arc-cli/internal/domain"
-	"github.com/masa6161/arc-cli/internal/git"
-	"github.com/masa6161/arc-cli/internal/github"
 	"github.com/masa6161/arc-cli/internal/terminal"
 )
 
@@ -55,8 +52,6 @@ var (
 	guidance            string
 	guidanceFile        string
 	verbose             bool
-	worktreeBranch      string
-	prNumber            string
 	excludePatterns     []string
 	noConfig            bool
 	agentName           string
@@ -73,8 +68,6 @@ var (
 	fpFilterAgentName   string
 	fpFilterModel       string
 	fpFilterEffort      string
-	noPRFeedback        bool
-	prFeedbackAgent     string
 	noCrossCheck        bool
 	crossCheckAgent     string
 	crossCheckModel     string
@@ -140,10 +133,6 @@ Exit codes:
 		"Path to file containing review guidance (env: ARC_GUIDANCE_FILE)")
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false,
 		"Print agent messages as they arrive")
-	rootCmd.Flags().StringVarP(&worktreeBranch, "worktree-branch", "B", "",
-		"Review a branch in a temporary worktree")
-	rootCmd.Flags().StringVar(&prNumber, "pr", "",
-		"Review a PR by number (fetches into temp worktree)")
 
 	// Filtering options
 	rootCmd.Flags().StringArrayVar(&excludePatterns, "exclude-pattern", nil,
@@ -178,10 +167,6 @@ Exit codes:
 		"LLM model for FP filter/triage (default: same as --summarizer-model, env: ARC_FP_FILTER_MODEL)")
 	rootCmd.Flags().StringVar(&fpFilterEffort, "fp-filter-effort", "",
 		"Reasoning effort for FP filter/triage (default: same as summarizer, env: ARC_FP_FILTER_EFFORT)")
-	rootCmd.Flags().BoolVar(&noPRFeedback, "no-pr-feedback", false,
-		"Disable reading PR comments for feedback context (env: ARC_PR_FEEDBACK=false)")
-	rootCmd.Flags().StringVar(&prFeedbackAgent, "pr-feedback-agent", "",
-		"Agent for PR feedback summarization (default: same as --summarizer-agent, env: ARC_PR_FEEDBACK_AGENT)")
 	rootCmd.Flags().BoolVar(&noCrossCheck, "no-cross-check", false,
 		"Disable cross-group consistency verification (env: ARC_CROSS_CHECK=false)")
 	rootCmd.Flags().StringVar(&crossCheckAgent, "cross-check-agent", "",
@@ -225,162 +210,6 @@ Exit codes:
 	return 0
 }
 
-// worktreeResult holds the outputs from worktree setup.
-type worktreeResult struct {
-	workDir          string
-	detectedBase     string // PR base ref detected from GitHub (empty if not auto-detected)
-	baseAutoDetected bool
-	prRemote         string
-	prRepoRoot       string
-	cleanup          func() // Call to remove worktree; nil if no worktree created
-}
-
-// setupWorktree handles --pr and --worktree-branch modes.
-// Returns a worktreeResult with the working directory and cleanup function.
-// If neither flag is set, returns zero-value result (no worktree).
-func setupWorktree(ctx context.Context, cmd *cobra.Command, logger *terminal.Logger) (worktreeResult, error) {
-	var result worktreeResult
-
-	// Validate mutual exclusivity
-	if prNumber != "" && worktreeBranch != "" {
-		logger.Log("--pr and --worktree-branch are mutually exclusive", terminal.StyleError)
-		return result, exitCode(domain.ExitError)
-	}
-
-	// Handle PR-based review
-	if prNumber != "" {
-		if err := github.CheckGHAvailable(); err != nil {
-			logger.Logf(terminal.StyleError, "--pr requires gh CLI: %v", err)
-			return result, exitCode(domain.ExitError)
-		}
-
-		// Early validation: check PR exists and auth is valid
-		if err := github.ValidatePR(ctx, prNumber); err != nil {
-			if errors.Is(err, github.ErrNoPRFound) {
-				logger.Logf(terminal.StyleError, "PR #%s not found", prNumber)
-			} else if errors.Is(err, github.ErrAuthFailed) {
-				logger.Logf(terminal.StyleError, "GitHub authentication failed. Run 'gh auth login' to authenticate.")
-			} else {
-				logger.Logf(terminal.StyleError, "Failed to access PR #%s: %v", prNumber, err)
-			}
-			return result, exitCode(domain.ExitError)
-		}
-
-		logger.Logf(terminal.StyleInfo, "Fetching PR %s#%s%s",
-			terminal.Color(terminal.Bold), prNumber, terminal.Color(terminal.Reset))
-
-		// Auto-detect base ref only if not explicitly set via flag OR env var
-		// This respects user's intentional base configuration
-		explicitBaseSet := cmd.Flags().Changed("base") || os.Getenv("ARC_BASE_REF") != ""
-		if !explicitBaseSet {
-			if detectedBase, err := github.GetPRBaseRef(ctx, prNumber); err == nil && detectedBase != "" {
-				result.detectedBase = detectedBase
-				result.baseAutoDetected = true // Ensures config.Resolve won't override it
-				logger.Logf(terminal.StyleDim, "Auto-detected base: %s", detectedBase)
-			}
-		}
-
-		// Get repo root for worktree creation
-		repoRoot, err := git.GetRoot()
-		if err != nil {
-			logger.Logf(terminal.StyleError, "%v", err)
-			return result, exitCode(domain.ExitError)
-		}
-		result.prRepoRoot = repoRoot
-
-		// Detect the correct remote for PR refs (handles fork workflows)
-		remote := github.GetRepoRemote(ctx)
-		result.prRemote = remote
-
-		// Create worktree from PR - uses FETCH_HEAD to avoid branch conflicts
-		wt, err := git.CreateWorktreeFromPR(repoRoot, remote, prNumber)
-		if err != nil {
-			logger.Logf(terminal.StyleError, "%v", err)
-			return result, exitCode(domain.ExitError)
-		}
-		result.cleanup = func() {
-			logger.Log("Cleaning up worktree", terminal.StyleDim)
-			_ = wt.Remove()
-		}
-
-		logger.Logf(terminal.StyleSuccess, "Worktree ready %s(%s)%s",
-			terminal.Color(terminal.Dim), wt.Path, terminal.Color(terminal.Reset))
-		result.workDir = wt.Path
-	} else if worktreeBranch != "" {
-		logger.Logf(terminal.StyleInfo, "Creating worktree for %s%s%s",
-			terminal.Color(terminal.Bold), worktreeBranch, terminal.Color(terminal.Reset))
-
-		// Check if this is fork notation (username:branch)
-		var actualRef string
-		var cleanupRemote func()
-
-		forkRef, err := github.ResolveForkRef(ctx, worktreeBranch)
-		if err != nil {
-			logger.Logf(terminal.StyleError, "%v", err)
-			return result, exitCode(domain.ExitError)
-		}
-
-		if forkRef != nil {
-			// Fork flow: add remote, fetch, set ref
-			logger.Logf(terminal.StyleInfo, "Resolved fork PR #%d from %s",
-				forkRef.PRNumber, forkRef.Username)
-
-			repoRoot, err := git.GetRoot()
-			if err != nil {
-				logger.Logf(terminal.StyleError, "Error getting repo root: %v", err)
-				return result, exitCode(domain.ExitError)
-			}
-
-			// Add temporary remote
-			if err := git.AddRemote(repoRoot, forkRef.RemoteName, forkRef.RepoURL); err != nil {
-				logger.Logf(terminal.StyleError, "Error adding remote: %v", err)
-				return result, exitCode(domain.ExitError)
-			}
-			cleanupRemote = func() {
-				_ = git.RemoveRemote(repoRoot, forkRef.RemoteName)
-			}
-
-			// Fetch the branch
-			logger.Logf(terminal.StyleDim, "Fetching %s from %s", forkRef.Branch, forkRef.RepoURL)
-			if err := git.FetchBranch(ctx, repoRoot, forkRef.RemoteName, forkRef.Branch); err != nil {
-				cleanupRemote()
-				logger.Logf(terminal.StyleError, "Error fetching fork branch: %v", err)
-				return result, exitCode(domain.ExitError)
-			}
-
-			actualRef = fmt.Sprintf("%s/%s", forkRef.RemoteName, forkRef.Branch)
-		} else {
-			// Normal branch
-			actualRef = worktreeBranch
-		}
-
-		wt, err := git.CreateWorktree(actualRef)
-		if err != nil {
-			if cleanupRemote != nil {
-				cleanupRemote()
-			}
-			logger.Logf(terminal.StyleError, "%v", err)
-			return result, exitCode(domain.ExitError)
-		}
-
-		// Cleanup remote after worktree is created (worktree has the files, remote no longer needed)
-		if cleanupRemote != nil {
-			cleanupRemote()
-		}
-
-		result.cleanup = func() {
-			logger.Log("Cleaning up worktree", terminal.StyleDim)
-			_ = wt.Remove()
-		}
-
-		logger.Logf(terminal.StyleSuccess, "Worktree ready %s(%s)%s",
-			terminal.Color(terminal.Dim), wt.Path, terminal.Color(terminal.Reset))
-		result.workDir = wt.Path
-	}
-
-	return result, nil
-}
-
 // configResult holds the outputs from config loading and resolution.
 type configResult struct {
 	resolved        config.ResolvedConfig
@@ -388,21 +217,14 @@ type configResult struct {
 }
 
 // loadAndResolveConfig loads the config file, builds flag/env state, resolves
-// configuration precedence, qualifies the base ref for PR mode, validates,
-// and resolves guidance. It encapsulates all config-related setup.
-func loadAndResolveConfig(cmd *cobra.Command, wt worktreeResult, logger *terminal.Logger) (configResult, error) {
+// configuration precedence, validates, and resolves guidance.
+// It encapsulates all config-related setup.
+func loadAndResolveConfig(cmd *cobra.Command, logger *terminal.Logger) (configResult, error) {
 	// Load config file (unless --no-config)
-	// When using a worktree, load config from the worktree (branch-specific settings)
 	var cfg *config.Config
 	var configDir string
 	if !noConfig {
-		var result *config.LoadResult
-		var err error
-		if wt.workDir != "" {
-			result, err = config.LoadFromDirWithWarnings(wt.workDir)
-		} else {
-			result, err = config.LoadWithWarnings()
-		}
+		result, err := config.LoadWithWarnings()
 		if err != nil {
 			logger.Logf(terminal.StyleError, "Config error: %v", err)
 			return configResult{}, exitCode(domain.ExitError)
@@ -427,7 +249,7 @@ func loadAndResolveConfig(cmd *cobra.Command, wt worktreeResult, logger *termina
 		MediumDiffReviewersSet: cmd.Flags().Changed("medium-diff-reviewers"),
 		SmallDiffReviewersSet:  cmd.Flags().Changed("small-diff-reviewers"),
 		ConcurrencySet:         cmd.Flags().Changed("concurrency"),
-		BaseSet:                cmd.Flags().Changed("base") || wt.baseAutoDetected,
+		BaseSet:                cmd.Flags().Changed("base"),
 		TimeoutSet:             cmd.Flags().Changed("timeout"),
 		RetriesSet:             cmd.Flags().Changed("retries"),
 		FetchSet:               fetchFlagSet,
@@ -446,8 +268,6 @@ func loadAndResolveConfig(cmd *cobra.Command, wt worktreeResult, logger *termina
 		GuidanceFileSet:        cmd.Flags().Changed("guidance-file"),
 		NoFPFilterSet:          cmd.Flags().Changed("no-fp-filter"),
 		FPThresholdSet:         cmd.Flags().Changed("fp-threshold"),
-		NoPRFeedbackSet:        cmd.Flags().Changed("no-pr-feedback"),
-		PRFeedbackAgentSet:     cmd.Flags().Changed("pr-feedback-agent"),
 		NoCrossCheckSet:        cmd.Flags().Changed("no-cross-check"),
 		CrossCheckAgentSet:     cmd.Flags().Changed("cross-check-agent"),
 		CrossCheckModelSet:     cmd.Flags().Changed("cross-check-model"),
@@ -474,11 +294,6 @@ func loadAndResolveConfig(cmd *cobra.Command, wt worktreeResult, logger *termina
 	// Example: alias arc-nofetch='arc --no-fetch'
 	// When both flags are set (unlikely), noFetch takes precedence.
 	fetchValue := fetch && !noFetch
-	// Use auto-detected base ref from PR if available, otherwise use the flag value
-	resolvedBaseRef := baseRef
-	if wt.detectedBase != "" {
-		resolvedBaseRef = wt.detectedBase
-	}
 
 	autoPhaseValue := autoPhase && !noAutoPhase
 	// Normalize: --role-prompts=false and --no-role-prompts=false are no-ops for precedence.
@@ -501,7 +316,7 @@ func loadAndResolveConfig(cmd *cobra.Command, wt worktreeResult, logger *termina
 		MediumDiffReviewers: mediumDiffReviewers,
 		SmallDiffReviewers:  smallDiffReviewers,
 		Concurrency:         concurrency,
-		Base:                resolvedBaseRef,
+		Base:                baseRef,
 		Timeout:             timeout,
 		Retries:             retries,
 		Fetch:               fetchValue,
@@ -520,8 +335,6 @@ func loadAndResolveConfig(cmd *cobra.Command, wt worktreeResult, logger *termina
 		GuidanceFile:        guidanceFile,
 		FPFilterEnabled:     !noFPFilter,
 		FPThreshold:         fpThreshold,
-		PRFeedbackEnabled:   !noPRFeedback,
-		PRFeedbackAgent:     prFeedbackAgent,
 		CrossCheckEnabled:   !noCrossCheck,
 		CrossCheckAgent:     crossCheckAgent,
 		CrossCheckModel:     crossCheckModel,
@@ -535,20 +348,6 @@ func loadAndResolveConfig(cmd *cobra.Command, wt worktreeResult, logger *termina
 
 	// Resolve final configuration (precedence: flags > env vars > config file > defaults)
 	resolved := config.Resolve(cfg, envState, flagState, flagValues)
-
-	// For PR mode: fetch and qualify the base ref so git diff works in the detached worktree
-	// Only do this for unqualified branch names - skip for SHAs, tags, HEAD, or already-qualified refs
-	// When baseAutoDetected is true, always qualify (PR base refs are always unqualified branches)
-	if wt.prRemote != "" && git.ShouldQualifyBaseRef(resolved.Base, wt.baseAutoDetected) {
-		// Fetch the base ref from the remote so it exists locally
-		if err := git.FetchBaseRef(wt.prRepoRoot, wt.prRemote, resolved.Base); err != nil {
-			logger.Logf(terminal.StyleWarning, "Could not fetch base ref: %v", err)
-			// Don't qualify - keep original ref so git diff can try it directly
-		} else {
-			// Only qualify the base ref if fetch succeeded
-			resolved.Base = git.QualifyBaseRef(wt.prRemote, resolved.Base)
-		}
-	}
 
 	// Validate resolved config (semantic checks shared with config validate).
 	if err := resolved.Validate(); err != nil {
@@ -629,11 +428,6 @@ func runReview(cmd *cobra.Command, _ []string) error {
 
 	logger := terminal.NewLogger()
 
-	// Prune stale ARC worktrees from previous runs (only review-* dirs older than 2h)
-	if err := git.PruneStaleWorktrees(); err != nil && verbose {
-		logger.Logf(terminal.StyleDim, "Worktree prune: %v", err)
-	}
-
 	// Set up context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -652,43 +446,18 @@ func runReview(cmd *cobra.Command, _ []string) error {
 		}
 	}()
 
-	// Set up worktree (--pr or --worktree-branch)
-	wt, err := setupWorktree(ctx, cmd, logger)
-	if err != nil {
-		return err
-	}
-	if wt.cleanup != nil {
-		defer wt.cleanup()
-	}
-
 	// Load and resolve configuration
-	cfgResult, err := loadAndResolveConfig(cmd, wt, logger)
+	cfgResult, err := loadAndResolveConfig(cmd, logger)
 	if err != nil {
 		return err
-	}
-
-	// Auto-detect PR number for current branch when --pr is not specified.
-	// Skip auto-detection if PR feedback is disabled since the PR number is only used for feedback.
-	detectedPR := prNumber
-	if detectedPR == "" && cfgResult.resolved.PRFeedbackEnabled && github.IsGHAvailable() {
-		if detected, err := github.GetCurrentPRNumber(ctx, worktreeBranch); err == nil {
-			detectedPR = detected
-			if verbose {
-				logger.Logf(terminal.StyleDim, "Auto-detected PR #%s for current branch", detectedPR)
-			}
-		}
 	}
 
 	// Run the review
 	opts := ReviewOpts{
 		ResolvedConfig:  cfgResult.resolved,
 		Verbose:         verbose,
-		PRNumber:        prNumber,
-		DetectedPR:      detectedPR,
-		WorktreeBranch:  worktreeBranch,
 		UseRefFile:      refFile,
 		ExcludePatterns: cfgResult.excludePatterns,
-		WorkDir:         wt.workDir,
 		Phase:           phase,
 		Format:          formatOutput,
 	}

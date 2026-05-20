@@ -54,8 +54,6 @@ graph TD
         C[Reviewer 2]
         D[Reviewer N]
     end
-    A -->|if PR detected| P[PR Feedback Summarizer]
-    P -->|summarizes prior discussion| F
     B & C & D --> E[Summarizer]
     E -->|clusters & deduplicates| F[FP Filter]
     F -->|removes false positives| G[Consolidated Report]
@@ -95,15 +93,6 @@ arc
 # Review with custom settings
 arc --reviewers 10 --base develop --timeout 10m
 
-# Review a PR by number
-arc --pr 123
-
-# Review a specific branch in a temporary worktree
-arc --worktree-branch feature/my-branch
-
-# Review a PR from a forked repository
-arc --worktree-branch username:feature-branch
-
 # Verbose mode (show reviewer messages as they arrive)
 arc --verbose
 ```
@@ -135,13 +124,9 @@ The verdict field (`ok` / `advisory` / `blocking`) and exit-code policy apply on
 | `--timeout`         | `-t`  | 10m     | Timeout per reviewer                     |
 | `--retries`         | `-R`  | 1       | Retry failed reviewers N times           |
 | `--verbose`         | `-v`  | false   | Print agent messages in real-time        |
-| `--worktree-branch` | `-B`  |         | Review a branch in a temp worktree (supports `user:branch` for forks) |
 | `--fetch/--no-fetch`|       | true    | Fetch base ref from origin before diff   |
 | `--no-fp-filter`    |       | false   | Disable false positive filtering          |
 | `--fp-threshold`    |       | 75      | False positive confidence threshold 1-100 |
-| `--no-pr-feedback`  |       | false   | Disable PR feedback summarization         |
-| `--pr-feedback-agent`|      |         | Agent for PR feedback summarization       |
-| `--pr`              |       |         | Review a PR by number (fetches into temp worktree) |
 | `--guidance`        |       |         | Steering context appended to review prompt (env: ARC_GUIDANCE) |
 | `--guidance-file`   |       |         | Path to file containing review guidance (env: ARC_GUIDANCE_FILE) |
 | `--ref-file`        |       | false   | Write diff to temp file instead of embedding in prompt (auto for large diffs) |
@@ -181,24 +166,6 @@ arc -r 10 -R 3 -c 3
 ```
 
 By default, concurrency equals the reviewer count (all run in parallel).
-
-### Fork PR Support
-
-Review pull requests from forked repositories using GitHub's `username:branch` notation:
-
-```bash
-# Review a PR from user "contributor" on branch "fix-bug"
-arc --worktree-branch contributor:fix-bug
-```
-
-ARC will:
-1. Query GitHub to find the open PR from that user's branch
-2. Add a temporary remote pointing to the fork
-3. Fetch the branch
-4. Create a worktree and run the review
-5. Clean up the temporary remote
-
-This requires an open PR from the fork to the current repository. The `gh` CLI must be authenticated.
 
 ### Agent Selection
 
@@ -247,30 +214,6 @@ arc --guidance-file .arc-guidance.md
 
 Guidance is appended to the default review prompts, preserving the tuned output format and skip rules. Use it to provide domain context, focus areas, or project conventions.
 
-### PR Feedback Summarization
-
-When reviewing a PR (via `--pr` flag or auto-detected from the current branch), ARC can summarize prior PR discussion to improve false positive filtering. This helps avoid re-surfacing issues that have already been discussed and dismissed.
-
-The summarizer fetches:
-- PR description
-- Review comments (inline code comments)
-- Issue comments (general PR discussion)
-- Review summaries (approve/request-changes/comment bodies)
-
-This context is passed to the false positive filter, which can then recognize findings that were previously acknowledged as intentional or already addressed.
-
-```bash
-# Disable PR feedback summarization
-arc --no-pr-feedback
-
-# Use a specific agent for feedback summarization
-arc --pr-feedback-agent claude
-```
-
-PR feedback summarization runs in parallel with the reviewers and is enabled by default. It only activates when:
-1. A PR is detected (via `--pr` flag or auto-detection)
-2. The false positive filter is enabled
-
 ### Environment Variables
 
 | Variable                  | Description                              |
@@ -283,8 +226,6 @@ PR feedback summarization runs in parallel with the reviewers and is enabled by 
 | `ARC_FETCH`               | Fetch base ref from origin (true/false)  |
 | `ARC_FP_FILTER`           | Enable false positive filtering (true/false) |
 | `ARC_FP_THRESHOLD`        | False positive confidence threshold 1-100 |
-| `ARC_PR_FEEDBACK`         | Enable PR feedback summarization (true/false) |
-| `ARC_PR_FEEDBACK_AGENT`   | Agent for PR feedback summarization |
 | `ARC_REVIEWER_AGENT`      | Default reviewer agent(s), comma-separated |
 | `ARC_ARCH_REVIEWER_AGENT` | Single agent for arch phase in auto-phase grouped diff |
 | `ARC_DIFF_REVIEWER_AGENTS`| Agent(s) for diff phase in auto-phase grouped diff |
@@ -355,9 +296,6 @@ fp_filter:
   enabled: true           # Enable LLM-based false positive filtering
   threshold: 75           # Confidence threshold 1-100 (100 = definitely false positive)
 
-pr_feedback:
-  enabled: true           # Summarize prior PR comments to improve FP filtering
-  # agent: claude         # Agent for summarization (defaults to summarizer_agent)
 ```
 
 ### Model matrix (optional)
@@ -376,7 +314,6 @@ models:
     summarizer:     { model: gpt-5.4,      effort: high }
     fp_filter:      { model: gpt-5.4-mini, effort: low }
     cross_check:    { model: gpt-5.4,      effort: medium }
-    pr_feedback:    { model: gpt-5.4-mini }
   sizes:
     large:
       arch_reviewer: { model: gpt-5.4,     effort: high }

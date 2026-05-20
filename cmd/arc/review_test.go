@@ -1766,8 +1766,6 @@ func TestCollectAllCLINames_WithOverrides(t *testing.T) {
 			DiffReviewerAgents: []string{"codex", "gemini"},
 			CrossCheckEnabled:  true,
 			CrossCheckAgent:    "claude",
-			PRFeedbackEnabled:  true,
-			PRFeedbackAgent:    "gemini",
 		},
 	}
 	names := collectAllCLINames(opts)
@@ -1796,23 +1794,6 @@ func TestCollectAllCLINames_CrossCheckDisabled(t *testing.T) {
 	for _, n := range names {
 		if n == "gemini" {
 			t.Error("cross-check disabled: gemini should not be in CLI names")
-		}
-	}
-}
-
-func TestCollectAllCLINames_PRFeedbackEnabled_NotIncluded(t *testing.T) {
-	opts := ReviewOpts{
-		ResolvedConfig: config.ResolvedConfig{
-			ReviewerAgents:    []string{"codex"},
-			SummarizerAgent:   "codex",
-			PRFeedbackEnabled: true,
-			PRFeedbackAgent:   "gemini",
-		},
-	}
-	names := collectAllCLINames(opts)
-	for _, n := range names {
-		if n == "gemini" {
-			t.Error("PR feedback enabled: gemini should still not be in CLI names (soft-failure design)")
 		}
 	}
 }
