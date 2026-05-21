@@ -90,7 +90,7 @@ func main() {
 func run() int {
 	rootCmd := &cobra.Command{
 		Use:   "arc",
-		Short: "Adaptive Review Coordinator - run parallel code reviews",
+		Short: "Adaptive code-Review Coordinator - run parallel code reviews",
 		Long: `Run parallel LLM-powered code reviews, deduplicate findings, and summarize results.
 
 Exit codes:

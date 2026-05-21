@@ -17,7 +17,7 @@
 
 ## プロジェクト概要
 
-Go 製 CLI `arc` の native Windows ポーティング。現行リポジトリは [masa6161/arc-cli](https://github.com/masa6161/arc-cli)。Rich Haase 版を起点にした hard fork として、Adaptive Review Coordinator へリネームしている。LLM reviewer CLI (`codex`, `claude`, `gemini`) をサブプロセスで起動し、並列コードレビューを行う。GitHub 連携は `gh` CLI 前提。PR 投稿機能はベータ段階で、`--local` が現在サポートされるパス。
+Go 製 CLI `arc` の native Windows ポーティング。現行リポジトリは [masa6161/arc-cli](https://github.com/masa6161/arc-cli)。Rich Haase 版を起点にした hard fork として、Adaptive code-Review Coordinator へリネームしている。LLM reviewer CLI (`codex`, `claude`, `gemini`) をサブプロセスで起動し、並列コードレビューを行う。GitHub 連携は `gh` CLI 前提。PR 投稿機能はベータ段階で、`--local` が現在サポートされるパス。
 
 ## ビルドとテスト
 
