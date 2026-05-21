@@ -109,12 +109,10 @@ type inputItem struct {
 	Severity  string `json:"severity,omitempty"`
 }
 
-// SummarizeOptions bundles model/effort resolution for the summarizer role.
-// Empty fields fall back to the agent's built-in defaults.
+// SummarizeOptions bundles agent runtime options for the summarizer role.
+// Empty fields in the embedded AgentOptions fall back to the agent's built-in defaults.
 type SummarizeOptions struct {
-	Model     string
-	Effort    string
-	CodexHome string
+	agent.AgentOptions
 }
 
 // Summarize summarizes the aggregated findings using an LLM.
@@ -134,7 +132,7 @@ func Summarize(ctx context.Context, agentName string, opts SummarizeOptions, agg
 	}
 
 	// Create agent
-	ag, err := agent.NewAgentWithOptions(agentName, agent.AgentOptions{Model: opts.Model, Effort: opts.Effort, CodexHome: opts.CodexHome})
+	ag, err := agent.NewAgentWithOptions(agentName, opts.AgentOptions)
 	if err != nil {
 		return nil, err
 	}

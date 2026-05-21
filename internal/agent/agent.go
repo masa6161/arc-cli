@@ -16,10 +16,15 @@ import (
 type AgentOptions struct {
 	Model  string
 	Effort string
-	// CodexHome is the resolved Codex home for codex subprocesses.
+	Codex  CodexOptions
+}
+
+// CodexOptions configures Codex-specific runtime behavior.
+type CodexOptions struct {
+	// Home is the resolved Codex home for codex subprocesses.
 	// It is supplied by operator-controlled environment resolution, not by
 	// repository .arc.yaml content.
-	CodexHome string
+	Home string
 }
 
 // Agent represents a backend that can execute code reviews and summarizations.

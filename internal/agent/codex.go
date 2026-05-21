@@ -46,7 +46,7 @@ func NewCodexAgent(model string) *CodexAgent {
 
 // NewCodexAgentWithOptions creates a new CodexAgent instance with the given options.
 func NewCodexAgentWithOptions(opts AgentOptions) *CodexAgent {
-	return &CodexAgent{model: opts.Model, effort: opts.Effort, codexHome: opts.CodexHome}
+	return &CodexAgent{model: opts.Model, effort: opts.Effort, codexHome: opts.Codex.Home}
 }
 
 // Name returns the agent's identifier.
@@ -56,7 +56,7 @@ func (c *CodexAgent) Name() string {
 
 // Options returns the AgentOptions the agent was constructed with.
 func (c *CodexAgent) Options() AgentOptions {
-	return AgentOptions{Model: c.model, Effort: c.effort, CodexHome: c.codexHome}
+	return AgentOptions{Model: c.model, Effort: c.effort, Codex: CodexOptions{Home: c.codexHome}}
 }
 
 // IsAvailable checks if the codex CLI is installed and accessible.
