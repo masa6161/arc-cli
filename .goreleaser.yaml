@@ -92,7 +92,7 @@ release:
   header: |
     ## ARC v{{.Version}}
 
-    Adaptive Review Coordinator - run parallel code reviews with AI agents.
+    Adaptive code-Review Coordinator - run parallel code reviews with AI agents.
   footer: |
     ---
 
@@ -121,7 +121,7 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/masa6161/arc-cli"
-    description: "Adaptive Review Coordinator - run parallel code reviews with AI agents"
+    description: "Adaptive code-Review Coordinator - run parallel code reviews with AI agents"
     license: "MIT"
     commit_author:
       name: goreleaserbot

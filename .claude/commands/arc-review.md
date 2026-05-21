@@ -1,6 +1,6 @@
 # ARC Review
 
-ARC (Adaptive Review Coordinator) を実行し、マルチエージェントレビュー結果を構造化レポートとして報告する。
+ARC (Adaptive code-Review Coordinator) を実行し、マルチエージェントレビュー結果を構造化レポートとして報告する。
 
 2つのモードがある:
 - **単発レビュー**（デフォルト）: ARC を1回実行し、findings をレポートして終了

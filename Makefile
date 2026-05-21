@@ -1,4 +1,4 @@
-# Adaptive Review Coordinator development tasks
+# Adaptive code-Review Coordinator development tasks
 
 .PHONY: help build test test-coverage fmt lint vet tidy clean find-deadcode staticcheck check eval eval-check-deps
 

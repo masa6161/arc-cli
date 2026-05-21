@@ -2,7 +2,9 @@
 
 A CLI tool that runs parallel AI-powered code reviews using LLM agents ([Codex](https://github.com/openai/codex), [Claude Code](https://github.com/anthropics/claude-code), or [Gemini CLI](https://github.com/google-gemini/gemini-cli)) and aggregates findings intelligently.
 
-ARC is a hard fork of Rich Haase's original Agentic Code Reviewer project, renamed and adapted as Adaptive Review Coordinator for the Windows-native path.
+ARC is a hard fork of Rich Haase's original Agentic Code Reviewer project, renamed and adapted as Adaptive code-Review Coordinator for the Windows-native path.
+
+**[日本語版 README はこちら](README_JP.md)**
 
 <!-- Uncomment after recording the demo:
 <p align="center">
@@ -28,15 +30,22 @@ On Windows, use the source install or the release ZIP described below.
 
 ## Prerequisites
 
-You need **at least one** of the following LLM CLIs installed and authenticated:
+### Required
 
-| Agent | Installation |
-|-------|--------------|
-| Codex | [github.com/openai/codex](https://github.com/openai/codex) (default) |
-| Claude Code | [github.com/anthropics/claude-code](https://github.com/anthropics/claude-code) |
-| Gemini CLI | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) |
+| Tool | Version | Installation | Purpose |
+|------|---------|--------------|---------|
+| Git  |         | [git-scm.com](https://git-scm.com) | ARC invokes `git` at runtime for diff, fetch, and repo detection |
+| Go   | >= 1.25 | [go.dev/dl](https://go.dev/dl) | Required only for building from source (`go install`) |
 
-Optional:
+You also need **at least one** of the following LLM CLIs installed and authenticated:
+
+| Agent | Installation | Authentication |
+|-------|--------------|----------------|
+| Codex | [github.com/openai/codex](https://github.com/openai/codex) (default) | Set `OPENAI_API_KEY` or run `codex auth` |
+| Claude Code | [github.com/anthropics/claude-code](https://github.com/anthropics/claude-code) | Run `claude login` |
+| Gemini CLI | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Set `GEMINI_API_KEY` or run `gemini auth login` |
+
+### Optional
 
 | Tool | Installation | Purpose |
 |------|--------------|---------|
@@ -44,24 +53,44 @@ Optional:
 
 ## How It Works
 
-ARC spawns multiple parallel reviewers, each invoking your chosen LLM agent (Codex, Claude, or Gemini) independently. The parallel approach increases coverage: different reviewers may catch different issues. After all reviewers complete, ARC aggregates and clusters similar findings using an LLM summarizer, filters out likely false positives, then presents a consolidated report.
+ARC automatically classifies the diff size (small / medium / large) and selects an appropriate review strategy:
+
+- **Small** diffs get a flat parallel review — N reviewers each see the full diff.
+- **Medium** diffs split into an architecture review (full diff) plus grouped diff reviews where each reviewer covers a subset of files.
+- **Large** diffs use the same arch + grouped structure as medium, and additionally run a cross-check phase that verifies consistency across file groups.
+
+After all reviewers complete, ARC aggregates findings, runs an LLM summarizer to cluster and deduplicate, then applies a false-positive filter with severity triage (blocking / advisory / noise) before presenting the final verdict.
 
 ```mermaid
-graph TD
-    A[arc] -->|spawns N reviewers| B
-    subgraph Parallel Review
-        B[Reviewer 1]
-        C[Reviewer 2]
-        D[Reviewer N]
-    end
-    B & C & D --> E[Summarizer]
-    E -->|clusters & deduplicates| F[FP Filter]
-    F -->|removes false positives| G[Consolidated Report]
-    G --> H[Terminal Report]
-    H --> I[Done]
+flowchart TD
+    A[arc] --> B{Diff Size\nClassification}
+    B -->|small| S["N x Diff Reviewer\n(full diff, parallel)"]
+    B -->|medium| M["1 Arch + N Grouped\nDiff Reviewers"]
+    B -->|large| L["1 Arch + N Grouped\nDiff Reviewers"]
+    S --> AGG[Aggregate Findings]
+    M --> AGG
+    L --> AGG
+    AGG -->|large only| CC["Cross-check\n(inter-group consistency)"]
+    AGG -->|small / medium| SUM["Summarizer\n(cluster and deduplicate)"]
+    CC --> SUM
+    SUM --> FP["FP Filter / Triage\n(blocking / advisory / noise)"]
+    FP --> RPT[Report + Verdict]
 ```
 
+| Size | Reviewers | Cross-check | Typical use |
+|------|-----------|-------------|-------------|
+| small | N flat diff reviewers | No | Few files, small changes |
+| medium | 1 arch + N grouped diff reviewers | No | Moderate changes across multiple files |
+| large | 1 arch + N grouped diff reviewers | Yes | Many files, large-scale changes |
+
+> **Fallback behavior**: medium and large diffs require at least 2 splittable file groups for the grouped review path. When fewer groups are available, ARC falls back to a medium flat review (1 arch + N diff reviewers on the full diff) and cross-check is skipped.
+
 ## Installation
+
+`go install` places the binary in Go's bin directory (`$GOPATH/bin` or `$GOBIN`). Ensure this directory is in your `PATH`:
+
+- **macOS / Linux**: typically `~/go/bin` — add `export PATH="$PATH:$(go env GOPATH | cut -d: -f1)/bin"` to your shell profile
+- **Windows**: typically `%USERPROFILE%\go\bin` — the Go installer usually adds this to `PATH`; if not, add it via System Settings > Environment Variables
 
 ### Source (macOS / Linux)
 
@@ -82,7 +111,7 @@ arc --help
 
 #### Direct Download
 
-Download the Windows release ZIP from GitHub Releases and extract `arc.exe`.
+Download the Windows release ZIP from GitHub Releases and extract `arc.exe` to a directory in your `PATH`.
 
 ## Usage
 
@@ -143,13 +172,18 @@ The verdict field (`ok` / `advisory` / `blocking`) and exit-code policy apply on
 | `--large-diff-reviewers`|   | 4       | Number of diff reviewers in auto-phase grouped path (large diff) |
 | `--medium-diff-reviewers`|  | 2       | Number of diff reviewers for auto-phase medium and --phase medium |
 | `--small-diff-reviewers`|   | 1       | Number of reviewers for auto-phase small and --phase small |
-| `--role-prompts`/`--no-role-prompts`| | true | Use role-specific prompts for auto-phase diff/arch reviewers (note: `--help` shows `false` as the cobra default, but the effective default is `true` via config resolution) |
+| `--role-prompts`/`--no-role-prompts`| | true | Use role-specific prompts for auto-phase diff/arch reviewers |
 | `--summarizer-timeout`|     | 5m      | Timeout for summarizer phase              |
 | `--fp-filter-timeout`|      | 5m      | Timeout for false positive filter phase   |
 | `--no-cross-check`  |       | false   | Disable cross-group consistency verification |
 | `--cross-check-agent`|      |         | Agent(s) for cross-check verification, comma-separated (default: same as --summarizer-agent) |
 | `--cross-check-model`|      |         | LLM model(s) for cross-check, comma-separated (REQUIRED when cross-check enabled) |
 | `--cross-check-timeout`|    | 5m      | Timeout for cross-check phase             |
+| `--fp-filter-agent` |       |         | Agent for FP filter/triage (default: same as --summarizer-agent, env: ARC_FP_FILTER_AGENT) |
+| `--fp-filter-model` |       |         | LLM model for FP filter/triage (default: same as --summarizer-model, env: ARC_FP_FILTER_MODEL) |
+| `--fp-filter-effort`|       |         | Reasoning effort for FP filter/triage (env: ARC_FP_FILTER_EFFORT) |
+| `--no-triage`       |       | false   | Disable severity triage (FP-only mode, env: ARC_TRIAGE=false) |
+| `--show-noise`      |       | false   | Show noise-level findings that are normally hidden (env: ARC_SHOW_NOISE) |
 | `--strict`          |       | false   | Exit 1 on any advisory verdict            |
 | `--format`          |       | text    | Output format: text or json               |
 
@@ -230,6 +264,8 @@ Guidance is appended to the default review prompts, preserving the tuned output 
 | `ARC_ARCH_REVIEWER_AGENT` | Single agent for arch phase in auto-phase grouped diff |
 | `ARC_DIFF_REVIEWER_AGENTS`| Agent(s) for diff phase in auto-phase grouped diff |
 | `ARC_SUMMARIZER_AGENT`    | Default summarizer agent  |
+| `ARC_REVIEWER_MODEL`      | LLM model for review agents                |
+| `ARC_SUMMARIZER_MODEL`    | LLM model for summarizer/FP filter agents  |
 | `ARC_CODEX_HOME`          | Codex home directory passed to `codex` subprocesses; set as a user environment variable, not in `.arc.yaml` |
 | `CODEX_HOME`              | Fallback Codex home directory when `ARC_CODEX_HOME` is unset |
 | `ARC_SUMMARIZER_TIMEOUT`  | Timeout for summarizer phase (e.g., "5m" or "300") |
@@ -243,6 +279,11 @@ Guidance is appended to the default review prompts, preserving the tuned output 
 | `ARC_CROSS_CHECK_AGENT`   | Agent(s) for cross-check verification      |
 | `ARC_CROSS_CHECK_MODEL`   | LLM model(s) for cross-check               |
 | `ARC_CROSS_CHECK_TIMEOUT` | Timeout for cross-check phase (e.g., "5m" or "300") |
+| `ARC_FP_FILTER_AGENT`     | Agent for FP filter/triage (default: same as summarizer) |
+| `ARC_FP_FILTER_MODEL`     | LLM model for FP filter/triage             |
+| `ARC_FP_FILTER_EFFORT`    | Reasoning effort for FP filter/triage      |
+| `ARC_TRIAGE`              | Enable severity triage in FP filter (true/false) |
+| `ARC_SHOW_NOISE`          | Show noise-level findings (true/false)     |
 | `ARC_STRICT`              | Exit 1 on any advisory verdict (true/false) |
 | `ARC_GUIDANCE`            | Steering context appended to review prompt |
 | `ARC_GUIDANCE_FILE`       | Path to file containing review guidance    |
@@ -257,7 +298,15 @@ processes inherit it:
 
 ## Configuration
 
-Create `.arc.yaml` in your repository root to configure persistent settings:
+ARC's behavior varies significantly across agent backends (Codex, Claude, Gemini) and auto-phase sizes (small, medium, large) — each combination may need different models, effort levels, and timeout settings. We strongly recommend using a `.arc.yaml` config file rather than relying on CLI flags alone.
+
+Copy the [`.arc.yaml`](.arc.yaml) from this repository as a starting point and customize it for your project:
+
+```bash
+curl -o .arc.yaml https://raw.githubusercontent.com/masa6161/arc-cli/main/.arc.yaml
+```
+
+All fields are optional — defaults are used for anything not specified:
 
 ```yaml
 # All fields are optional - defaults shown in comments
@@ -283,6 +332,19 @@ fetch: true               # Fetch base ref from origin before diff
 summarizer_timeout: 5m    # Timeout for summarizer phase
 fp_filter_timeout: 5m     # Timeout for false positive filter phase
 
+# Auto-phase settings
+auto_phase: true          # Auto-select review phases based on diff size
+role_prompts: true        # Use role-specific prompts for auto-phase diff/arch reviewers
+# arch_reviewer_agent: "" # Single agent for arch phase (default: first reviewer_agent)
+# diff_reviewer_agents:   # Agent(s) for diff phase, round-robin (default: same as reviewer_agents)
+#   - codex
+#   - claude
+large_diff_reviewers: 4   # Number of diff reviewers in auto-phase large path
+medium_diff_reviewers: 2  # Number of diff reviewers in auto-phase medium path
+small_diff_reviewers: 1   # Number of reviewers in auto-phase small path
+# min_large_diff_reviewers: 2   # Minimum diff reviewers for large path (must be >= 2, default: 2)
+# min_medium_diff_reviewers: 2  # Minimum diff reviewers for medium path (must be >= 2, default: 2)
+
 # Review guidance (appended to built-in prompts)
 # guidance_file: .arc-guidance.md
 
@@ -295,6 +357,19 @@ filters:
 fp_filter:
   enabled: true           # Enable LLM-based false positive filtering
   threshold: 75           # Confidence threshold 1-100 (100 = definitely false positive)
+  triage: true            # Enable severity triage (blocking/advisory/noise)
+  show_noise: false       # Show noise-level findings in output
+  # agent: ""             # Agent for FP filter/triage (default: same as summarizer_agent)
+  # model: ""             # LLM model for FP filter/triage (default: same as summarizer_model)
+  # effort: ""            # Reasoning effort for FP filter/triage
+
+# Cross-check is enabled by default. It runs only on large diffs with >=2 file groups.
+# When enabled, a model is REQUIRED (via cross_check.model or models matrix).
+cross_check:
+  enabled: true           # Cross-group consistency verification (large diffs only)
+  # agent: ""             # Agent(s) for cross-check, comma-separated (default: same as summarizer_agent)
+  model: "gpt-5.4"        # REQUIRED when enabled (or supply via models.*.cross_check.model)
+# cross_check_timeout: 5m  # Timeout for cross-check phase
 
 ```
 
@@ -388,8 +463,20 @@ make lint
 # Run staticcheck
 make staticcheck
 
+# Run go vet
+make vet
+
 # Format code
 make fmt
+
+# Tidy go.mod
+make tidy
+
+# Run tests with coverage
+make test-coverage
+
+# Find dead code
+make find-deadcode
 
 # Clean build artifacts
 make clean
