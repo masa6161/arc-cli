@@ -27,9 +27,9 @@ func cliOrLegacy(value string, fromCLI bool) (cli, legacy string) {
 
 func agentOptions(model, effort string, opts ReviewOpts) agent.AgentOptions {
 	return agent.AgentOptions{
-		Model:     model,
-		Effort:    effort,
-		CodexHome: opts.CodexHome,
+		Model:  model,
+		Effort: effort,
+		Codex:  agent.CodexOptions{Home: opts.CodexHome},
 	}
 }
 
@@ -497,7 +497,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 			)
 			ccSpecs = append(ccSpecs, summarizer.CrossCheckAgentSpec{
 				Name:    name,
-				Options: summarizer.CrossCheckOptions{Model: perSpec.Model, Effort: perSpec.Effort, CodexHome: opts.CodexHome},
+				Options: summarizer.CrossCheckOptions{AgentOptions: agentOptions(perSpec.Model, perSpec.Effort, opts)},
 			})
 		}
 		// Lazy CLI availability check: only verify cross-check agent CLIs are
@@ -510,7 +510,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 			return domain.ExitError
 		}
 		for _, spec := range ccSpecs {
-			ccAg, err := agent.NewAgentWithOptions(spec.Name, agent.AgentOptions{Model: spec.Options.Model, Effort: spec.Options.Effort, CodexHome: spec.Options.CodexHome})
+			ccAg, err := agent.NewAgentWithOptions(spec.Name, spec.Options.AgentOptions)
 			if err != nil {
 				logger.Logf(terminal.StyleError, "Invalid cross-check agent %q: %v", spec.Name, err)
 				return domain.ExitError
@@ -561,7 +561,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 	summarizerCtx, summarizerCancel := context.WithTimeout(ctx, opts.SummarizerTimeout)
 	defer summarizerCancel()
 
-	summaryResult, err := summarizer.Summarize(summarizerCtx, opts.SummarizerAgent, summarizer.SummarizeOptions{Model: summSpec.Model, Effort: summSpec.Effort, CodexHome: opts.CodexHome}, aggregated, ccResult, opts.Verbose, logger)
+	summaryResult, err := summarizer.Summarize(summarizerCtx, opts.SummarizerAgent, summarizer.SummarizeOptions{AgentOptions: agentOptions(summSpec.Model, summSpec.Effort, opts)}, aggregated, ccResult, opts.Verbose, logger)
 	spinnerCancel()
 	<-spinnerDone
 
@@ -608,7 +608,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 			fpAgentName = opts.SummarizerAgent
 		}
 		if fpAgentName != opts.SummarizerAgent {
-			fpAg, err := agent.NewAgentWithOptions(fpAgentName, agent.AgentOptions{CodexHome: opts.CodexHome})
+			fpAg, err := agent.NewAgentWithOptions(fpAgentName, agentOptions("", "", opts))
 			if err != nil {
 				fpSpinnerCancel()
 				<-fpSpinnerDone
@@ -637,7 +637,7 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 			cliFPModel, cliFPEffort,
 			legacyFPModel, legacyFPEffort,
 		)
-		fpFilter := fpfilter.New(fpAgentName, fpSpec.Model, fpSpec.Effort, opts.CodexHome, opts.FPThreshold, opts.TriageEnabled, opts.Verbose, logger)
+		fpFilter := fpfilter.New(fpAgentName, agentOptions(fpSpec.Model, fpSpec.Effort, opts), opts.FPThreshold, opts.TriageEnabled, opts.Verbose, logger)
 		fpResult := fpFilter.Apply(fpCtx, summaryResult.Grouped, stats.SuccessfulReviewers)
 		fpSpinnerCancel()
 		<-fpSpinnerDone

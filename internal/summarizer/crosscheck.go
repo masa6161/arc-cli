@@ -299,12 +299,10 @@ func buildCrossCheckPayload(ccCtx CrossCheckContext) crossCheckPayload {
 	return payload
 }
 
-// CrossCheckOptions bundles model/effort resolution for the cross-check role.
-// Empty fields fall back to the agent's built-in defaults.
+// CrossCheckOptions bundles agent runtime options for the cross-check role.
+// Empty fields in the embedded AgentOptions fall back to the agent's built-in defaults.
 type CrossCheckOptions struct {
-	Model     string
-	Effort    string
-	CodexHome string
+	agent.AgentOptions
 }
 
 // CrossCheckAgentSpec bundles a cross-check agent name with its pre-resolved
@@ -428,7 +426,7 @@ func runCrossCheckAgent(
 	start := time.Now()
 	result := AgentCrossCheckResult{AgentName: agentName}
 
-	ag, err := agent.NewAgentWithOptions(agentName, agent.AgentOptions{Model: opts.Model, Effort: opts.Effort, CodexHome: opts.CodexHome})
+	ag, err := agent.NewAgentWithOptions(agentName, opts.AgentOptions)
 	if err != nil {
 		result.Err = fmt.Errorf("agent creation failed: %w", err)
 		result.Duration = time.Since(start)

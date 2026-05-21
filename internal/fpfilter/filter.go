@@ -39,9 +39,7 @@ type Result struct {
 
 type Filter struct {
 	agentName     string
-	model         string
-	effort        string
-	codexHome     string
+	opts          agent.AgentOptions
 	threshold     int
 	triageEnabled bool
 	verbose       bool
@@ -49,21 +47,18 @@ type Filter struct {
 }
 
 // New creates a new false positive filter.
-// The model parameter overrides the agent's default model (empty = default).
-// The effort parameter overrides the agent's default reasoning effort (empty = default).
-// The codexHome parameter is passed through only to Codex agent subprocesses.
+// opts carries model, effort, and backend-specific runtime options to the
+// selected agent.
 // When triageEnabled is true, severity-based classification (blocking/advisory/noise)
 // is applied in addition to fp_score filtering.
 // If verbose is true, non-fatal errors (like Close failures) are logged.
-func New(agentName, model, effort, codexHome string, threshold int, triageEnabled, verbose bool, logger *terminal.Logger) *Filter {
+func New(agentName string, opts agent.AgentOptions, threshold int, triageEnabled, verbose bool, logger *terminal.Logger) *Filter {
 	if threshold < 1 || threshold > 100 {
 		threshold = DefaultThreshold
 	}
 	return &Filter{
 		agentName:     agentName,
-		model:         model,
-		effort:        effort,
-		codexHome:     codexHome,
+		opts:          opts,
 		threshold:     threshold,
 		triageEnabled: triageEnabled,
 		logger:        logger,
@@ -138,7 +133,7 @@ func (f *Filter) Apply(ctx context.Context, grouped domain.GroupedFindings, tota
 		}
 	}
 
-	ag, err := agent.NewAgentWithOptions(f.agentName, agent.AgentOptions{Model: f.model, Effort: f.effort, CodexHome: f.codexHome})
+	ag, err := agent.NewAgentWithOptions(f.agentName, f.opts)
 	if err != nil {
 		return skippedResult(grouped, start, "agent creation failed: "+err.Error())
 	}

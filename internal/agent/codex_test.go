@@ -26,6 +26,26 @@ func TestCodexAgent_Name(t *testing.T) {
 	}
 }
 
+func TestAgentOptionsCodexNesting(t *testing.T) {
+	configuredCodexHome := filepath.Join(t.TempDir(), "configured-codex")
+	agent := NewCodexAgentWithOptions(AgentOptions{
+		Model:  "gpt-test",
+		Effort: "high",
+		Codex:  CodexOptions{Home: configuredCodexHome},
+	})
+
+	got := agent.Options()
+	if got.Model != "gpt-test" {
+		t.Errorf("Options().Model = %q, want %q", got.Model, "gpt-test")
+	}
+	if got.Effort != "high" {
+		t.Errorf("Options().Effort = %q, want %q", got.Effort, "high")
+	}
+	if got.Codex.Home != configuredCodexHome {
+		t.Errorf("Options().Codex.Home = %q, want %q", got.Codex.Home, configuredCodexHome)
+	}
+}
+
 func TestCodexAgent_IsAvailable(t *testing.T) {
 	t.Run("available", func(t *testing.T) {
 		prepareMockCLI(t, "codex", "args")
@@ -325,7 +345,7 @@ func TestCodexAgent_ExecuteReview_PassesConfiguredCodexAuthEnv(t *testing.T) {
 	t.Setenv("APPDATA", appData)
 	t.Setenv("LOCALAPPDATA", localAppData)
 
-	agent := NewCodexAgentWithOptions(AgentOptions{CodexHome: configuredCodexHome})
+	agent := NewCodexAgentWithOptions(AgentOptions{Codex: CodexOptions{Home: configuredCodexHome}})
 	result, err := agent.ExecuteReview(context.Background(), &ReviewConfig{
 		BaseRef: "main",
 		WorkDir: t.TempDir(),
@@ -370,7 +390,7 @@ func TestCodexAgent_ExecuteReview_ConfiguredCodexHomeOverridesProcessEnv(t *test
 	t.Setenv("ARC_CODEX_HOME", arcCodexHome)
 	t.Setenv("CODEX_HOME", codexHome)
 
-	agent := NewCodexAgentWithOptions(AgentOptions{CodexHome: configuredCodexHome})
+	agent := NewCodexAgentWithOptions(AgentOptions{Codex: CodexOptions{Home: configuredCodexHome}})
 	result, err := agent.ExecuteReview(context.Background(), &ReviewConfig{
 		BaseRef: "main",
 		WorkDir: t.TempDir(),
