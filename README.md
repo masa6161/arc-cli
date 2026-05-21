@@ -4,6 +4,8 @@ A CLI tool that runs parallel AI-powered code reviews using LLM agents ([Codex](
 
 ARC is a hard fork of Rich Haase's original Agentic Code Reviewer project, renamed and adapted as Adaptive code-Review Coordinator for the Windows-native path.
 
+**[日本語版 README はこちら](README_JP.md)**
+
 <!-- Uncomment after recording the demo:
 <p align="center">
   <img src="docs/assets/demo.svg" alt="ARC demo" width="800">
@@ -296,7 +298,15 @@ processes inherit it:
 
 ## Configuration
 
-Create `.arc.yaml` in your repository root to configure persistent settings:
+ARC's behavior varies significantly across agent backends (Codex, Claude, Gemini) and auto-phase sizes (small, medium, large) — each combination may need different models, effort levels, and timeout settings. We strongly recommend using a `.arc.yaml` config file rather than relying on CLI flags alone.
+
+Copy the [`.arc.yaml`](.arc.yaml) from this repository as a starting point and customize it for your project:
+
+```bash
+curl -o .arc.yaml https://raw.githubusercontent.com/masa6161/arc-cli/main/.arc.yaml
+```
+
+All fields are optional — defaults are used for anything not specified:
 
 ```yaml
 # All fields are optional - defaults shown in comments
