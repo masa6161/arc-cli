@@ -422,6 +422,22 @@ func (m *mockAuthFailAgent) ExecuteSummary(_ context.Context, _ string, _ []byte
 
 func (m *mockAuthFailAgent) Options() agent.AgentOptions { return agent.AgentOptions{} }
 
+// mockExecErrorAgent returns an error from ExecuteReview (simulates CLI not found).
+type mockExecErrorAgent struct {
+	name   string
+	errMsg string
+}
+
+func (m *mockExecErrorAgent) Name() string       { return m.name }
+func (m *mockExecErrorAgent) IsAvailable() error { return nil }
+func (m *mockExecErrorAgent) ExecuteReview(_ context.Context, _ *agent.ReviewConfig) (*agent.ExecutionResult, error) {
+	return nil, fmt.Errorf("%s", m.errMsg)
+}
+func (m *mockExecErrorAgent) ExecuteSummary(_ context.Context, _ string, _ []byte) (*agent.ExecutionResult, error) {
+	return nil, nil
+}
+func (m *mockExecErrorAgent) Options() agent.AgentOptions { return agent.AgentOptions{} }
+
 func TestRunReviewerWithRetry_SkipsRetryOnAuthFailure(t *testing.T) {
 	mock := &mockAuthFailAgent{name: "gemini", exitCode: 41, stderr: ""}
 
@@ -710,5 +726,30 @@ func TestRunReviewer_NoStderrOnSuccess(t *testing.T) {
 	}
 	if result.Stderr != "" {
 		t.Errorf("expected empty Stderr on success, got %q", result.Stderr)
+	}
+}
+
+func TestRunReviewer_PopulatesStderrOnExecError(t *testing.T) {
+	errMsg := "codex CLI not found in PATH: exec: \"codex\": executable file not found in %PATH%"
+	mock := &mockExecErrorAgent{name: "codex", errMsg: errMsg}
+
+	r := &Runner{
+		config:    Config{Reviewers: 1, Timeout: 10 * time.Second},
+		agents:    []agent.Agent{mock},
+		specs:     []ReviewerSpec{{ReviewerID: 1, Agent: mock}},
+		logger:    terminal.NewLogger(),
+		completed: new(atomic.Int32),
+	}
+
+	result := r.runReviewer(context.Background(), 1)
+
+	if result.ExitCode != -1 {
+		t.Errorf("expected exit code -1, got %d", result.ExitCode)
+	}
+	if result.Stderr != errMsg {
+		t.Errorf("expected Stderr=%q, got %q", errMsg, result.Stderr)
+	}
+	if result.AgentName != "codex" {
+		t.Errorf("expected AgentName=%q, got %q", "codex", result.AgentName)
 	}
 }

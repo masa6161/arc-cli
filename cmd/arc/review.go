@@ -39,15 +39,16 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		return domain.ExitError
 	}
 
-	// Early CLI availability preflight when auto-phase is active.
-	// Auto-phase may invoke any configured agent role (arch, diff, cross-check)
-	// depending on diff size, so verify all CLIs upfront to avoid wasting
-	// review cycles on a missing binary.
+	// Preflight: verify required CLIs exist before any work.
+	// Auto-phase may invoke additional agent roles (arch, diff, cross-check),
+	// so check all of them; non-auto-phase only needs reviewer agents.
+	preflightNames := opts.ReviewerAgents
 	if shouldUseAutoPhase(opts) {
-		if err := agent.CheckCLIAvailability(collectAllCLINames(opts)); err != nil {
-			logger.Logf(terminal.StyleError, "Preflight check failed: %v", err)
-			return domain.ExitError
-		}
+		preflightNames = collectAllCLINames(opts)
+	}
+	if err := agent.CheckCLIAvailability(preflightNames); err != nil {
+		logger.Logf(terminal.StyleError, "Preflight check failed: %v", err)
+		return domain.ExitError
 	}
 
 	// Resolve the base ref once before launching parallel reviewers.
