@@ -311,6 +311,7 @@ func (r *Runner) runReviewer(ctx context.Context, reviewerID int) domain.Reviewe
 		if r.verbose() {
 			r.logger.Logf(terminal.StyleWarning, "Reviewer #%d: execute error: %v", reviewerID, err)
 		}
+		result.Stderr = err.Error()
 		result.ExitCode = -1
 		result.Duration = time.Since(start)
 		return result
