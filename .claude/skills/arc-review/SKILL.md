@@ -1,3 +1,11 @@
+---
+name: arc-review
+description: >-
+  ARC (Adaptive code-Review Coordinator) を実行し、マルチエージェント
+  レビュー結果を構造化レポートとして報告する。単発レビューとゲートモードを提供。
+argument-hint: "[--gate] [--max-iter N] [--base <ref>] [--reviewer-agent <agents>] [--verbose] [--strict]"
+---
+
 # ARC Review
 
 ARC (Adaptive code-Review Coordinator) を実行し、マルチエージェントレビュー結果を構造化レポートとして報告する。
@@ -50,7 +58,7 @@ C:\Users\kondo\go\bin\arc.exe
 ### ステップ 1: ARC 実行
 
 ```powershell
-$ARC_BIN --local --format json --base <base> --verbose [追加パラメータ] 2>.arc/arc_stderr.tmp
+$ARC_BIN --format json --base <base> --verbose [追加パラメータ] 2>.arc/arc_stderr.tmp
 ```
 
 `--base` が省略された場合は ARC のデフォルト（`main`、`.arc.yaml` で上書き可）に委ねる。
@@ -129,7 +137,7 @@ Iteration N (N = 1 から開始):
        --guidance-file として使用（前 iteration のステップ 11 で生成済み）
 
   2. ARC 実行:
-     $ARC_BIN --local --format json --base <base> --verbose [--guidance-file ...] [追加パラメータ] 2>.arc/arc_stderr.tmp
+     $ARC_BIN --format json --base <base> --verbose [--guidance-file ...] [追加パラメータ] 2>.arc/arc_stderr.tmp
      ※ iteration 2+ でのみ --guidance-file を付与（ユーザー指定時は常に付与）
      ※ --verbose を常に付与し stderr をキャプチャ（Auto-phase モード情報の抽出用）
 
