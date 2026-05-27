@@ -45,6 +45,8 @@ Windows では、以下のソースインストールまたはリリース ZIP �
 | Claude Code | [github.com/anthropics/claude-code](https://github.com/anthropics/claude-code) | `claude login` を実行 |
 | Gemini CLI | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | `GEMINI_API_KEY` を設定 or `gemini auth login` を実行 |
 
+> **Claude Code の課金に関する注意:** ARC は Claude Code を `--print` フラグ（非インタラクティブモード）で起動します。1 回の ARC 実行で複数の非インタラクティブ Claude セッションが発生する場合があります（N 個のレビューア + サマライザー + FP フィルター）。2026 年 6 月 15 日以降、サブスクリプション認証での `claude -p` および Agent SDK の利用は Agent SDK クレジットから消費されます。クレジットが枯渇した場合、アカウントで有効になっていれば extra usage（API 従量課金）に移行します。`ANTHROPIC_API_KEY` による認証では、従来通り API の従量課金が適用されます。大規模なレビューを実行する前に、プランのクレジット残高と課金設定をご確認ください。詳細は [Agent SDK プラン課金](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) および [`claude -p` ドキュメント](https://code.claude.com/docs/en/headless) を参照してください。
+
 ### オプション
 
 | ツール | インストール | 用途 |
