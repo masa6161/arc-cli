@@ -45,6 +45,8 @@ You also need **at least one** of the following LLM CLIs installed and authentic
 | Claude Code | [github.com/anthropics/claude-code](https://github.com/anthropics/claude-code) | Run `claude login` |
 | Gemini CLI | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Set `GEMINI_API_KEY` or run `gemini auth login` |
 
+> **Claude Code billing note:** ARC invokes Claude Code with the `--print` flag (non-interactive mode). A single ARC run may spawn multiple non-interactive Claude sessions (N reviewers + summarizer + FP filter). Starting June 15, 2026, subscription-authenticated `claude -p` and Agent SDK usage will consume Agent SDK credits; once credits are exhausted, charges fall back to extra usage (API pay-as-you-go) if enabled on your account. When authenticating via `ANTHROPIC_API_KEY`, standard API pay-as-you-go billing applies as before. Check your plan's credit balance and billing settings before running large reviews. For details, see [Agent SDK plan billing](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) and [`claude -p` documentation](https://code.claude.com/docs/en/headless).
+
 ### Optional
 
 | Tool | Installation | Purpose |
