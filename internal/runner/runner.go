@@ -35,11 +35,13 @@ func (c *cappedOutputCapture) Write(p []byte) (int, error) {
 	defer c.mu.Unlock()
 	remaining := c.cap - len(c.buf)
 	if remaining > 0 {
-		if len(p) > remaining {
-			p = p[:remaining]
+		toWrite := p
+		if len(toWrite) > remaining {
+			toWrite = toWrite[:remaining]
 		}
-		c.buf = append(c.buf, p...)
+		c.buf = append(c.buf, toWrite...)
 	}
+	// Always return original len(p) to avoid io.ErrShortWrite from TeeReader.
 	return len(p), nil
 }
 
