@@ -39,6 +39,13 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		return domain.ExitError
 	}
 
+	for _, name := range opts.ReviewerAgents {
+		if name == "gemini" {
+			logger.Logf(terminal.StyleWarning, "Warning: Gemini CLI is deprecated and may be removed in a future version. Consider using 'codex' or 'claude' instead.")
+			break
+		}
+	}
+
 	// Preflight: verify required CLIs exist before any work.
 	// Auto-phase may invoke additional agent roles (arch, diff, cross-check),
 	// so check all of them; non-auto-phase only needs reviewer agents.
