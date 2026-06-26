@@ -5,9 +5,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -15,6 +17,37 @@ import (
 	"github.com/masa6161/arc-cli/internal/domain"
 	"github.com/masa6161/arc-cli/internal/terminal"
 )
+
+// cappedOutputCapture captures up to cap bytes of data written to it.
+// Safe for use as an io.Writer target of io.TeeReader.
+type cappedOutputCapture struct {
+	mu  sync.Mutex
+	buf []byte
+	cap int
+}
+
+func newCappedOutputCapture(cap int) *cappedOutputCapture {
+	return &cappedOutputCapture{buf: make([]byte, 0, cap), cap: cap}
+}
+
+func (c *cappedOutputCapture) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	remaining := c.cap - len(c.buf)
+	if remaining > 0 {
+		if len(p) > remaining {
+			p = p[:remaining]
+		}
+		c.buf = append(c.buf, p...)
+	}
+	return len(p), nil
+}
+
+func (c *cappedOutputCapture) String() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return string(c.buf)
+}
 
 // maxFindingPreviewLength is the maximum characters shown for a finding in
 // verbose output. Longer findings are truncated with "..." to prevent
@@ -331,8 +364,13 @@ func (r *Runner) runReviewer(ctx context.Context, reviewerID int) domain.Reviewe
 		return result
 	}
 
+	// Capture a prefix of stdout for auth failure detection.
+	// The TeeReader is transparent to the parser — it reads the same bytes.
+	stdoutCapture := newCappedOutputCapture(4096)
+	teeReader := io.TeeReader(execResult, stdoutCapture)
+
 	// Configure scanner
-	scanner := bufio.NewScanner(execResult)
+	scanner := bufio.NewScanner(teeReader)
 	agent.ConfigureScanner(scanner)
 
 	// Parse output
@@ -410,7 +448,10 @@ func (r *Runner) runReviewer(ctx context.Context, reviewerID int) domain.Reviewe
 			r.logger.Logf(terminal.StyleWarning, "Reviewer #%d stderr:%s\n%s",
 				reviewerID, terminal.Color(terminal.Reset), result.Stderr)
 		}
-		result.AuthFailed = agent.IsAuthFailure(selectedAgent.Name(), result.ExitCode, execResult.Stderr())
+		result.AuthFailed = agent.IsAuthFailure(selectedAgent.Name(), result.ExitCode, execResult.Stderr(), stdoutCapture.String())
+		if result.AuthFailed {
+			result.Findings = nil
+		}
 	}
 
 	// Record duration after process fully exits
