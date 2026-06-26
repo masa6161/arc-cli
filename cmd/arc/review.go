@@ -430,6 +430,11 @@ func executeReview(ctx context.Context, opts ReviewOpts, logger *terminal.Logger
 		return domain.ExitError
 	}
 
+	// Gemini deprecation warning: only fire when gemini will actually execute.
+	if warnGeminiDeprecation(opts, useGroupedSpecs, groupedSpecs, reviewAgents, actualReviewers) {
+		logger.Logf(terminal.StyleWarning, "Warning: Gemini CLI is deprecated and may be removed in a future version. Consider using 'codex' or 'claude' instead.")
+	}
+
 	if distributionStr != "" {
 		logger.Logf(terminal.StyleInfo, "Agent distribution: %s%s%s",
 			terminal.Color(terminal.Dim), distributionStr, terminal.Color(terminal.Reset))
@@ -735,6 +740,54 @@ func applyVerdictExitPolicy(verdict string, strict bool, findingsCode domain.Exi
 		return domain.ExitNoFindings
 	}
 	return findingsCode
+}
+
+// warnGeminiDeprecation returns true when gemini will actually be invoked in
+// any role during this run. It checks the resolved reviewer agents (accounting
+// for round-robin assignment), summarizer, cross-check, and FP filter roles.
+func warnGeminiDeprecation(opts ReviewOpts, useGroupedSpecs bool, groupedSpecs []runner.ReviewerSpec, reviewAgents []agent.Agent, actualReviewers int) bool {
+	const target = "gemini"
+
+	// Check reviewer agents that will actually be assigned via round-robin.
+	if useGroupedSpecs {
+		for _, s := range groupedSpecs {
+			if s.Agent != nil && s.Agent.Name() == target {
+				return true
+			}
+		}
+	} else {
+		for i := range actualReviewers {
+			a := agent.AgentForReviewer(reviewAgents, i+1)
+			if a != nil && a.Name() == target {
+				return true
+			}
+		}
+	}
+
+	// Check non-reviewer roles.
+	if opts.SummarizerAgent == target {
+		return true
+	}
+	fpAgent := opts.FPFilterAgent
+	if fpAgent == "" {
+		fpAgent = opts.SummarizerAgent
+	}
+	if fpAgent == target {
+		return true
+	}
+	if opts.CrossCheckEnabled {
+		ccAgent := opts.CrossCheckAgent
+		if ccAgent == "" {
+			ccAgent = opts.SummarizerAgent
+		}
+		for _, name := range strings.Split(ccAgent, ",") {
+			if strings.TrimSpace(name) == target {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // shouldUseAutoPhase returns true when auto-phase is enabled and no explicit

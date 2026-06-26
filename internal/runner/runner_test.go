@@ -753,3 +753,51 @@ func TestRunReviewer_PopulatesStderrOnExecError(t *testing.T) {
 		t.Errorf("expected AgentName=%q, got %q", "codex", result.AgentName)
 	}
 }
+
+func TestCappedOutputCapture(t *testing.T) {
+	t.Run("captures up to cap", func(t *testing.T) {
+		c := newCappedOutputCapture(10)
+		n, err := c.Write([]byte("hello"))
+		if err != nil || n != 5 {
+			t.Fatalf("Write(5) = (%d, %v), want (5, nil)", n, err)
+		}
+		if c.String() != "hello" {
+			t.Errorf("got %q, want %q", c.String(), "hello")
+		}
+	})
+
+	t.Run("truncates at cap boundary", func(t *testing.T) {
+		c := newCappedOutputCapture(8)
+		c.Write([]byte("hello"))
+		n, err := c.Write([]byte("world"))
+		if err != nil || n != 5 {
+			t.Fatalf("Write(5) = (%d, %v), want (5, nil)", n, err)
+		}
+		if c.String() != "hellowor" {
+			t.Errorf("got %q, want %q", c.String(), "hellowor")
+		}
+	})
+
+	t.Run("returns original len after cap exceeded", func(t *testing.T) {
+		c := newCappedOutputCapture(4)
+		c.Write([]byte("full"))
+		n, err := c.Write([]byte("more data"))
+		if err != nil || n != 9 {
+			t.Fatalf("Write(9) after cap = (%d, %v), want (9, nil)", n, err)
+		}
+		if c.String() != "full" {
+			t.Errorf("buffer grew past cap: got %q", c.String())
+		}
+	})
+
+	t.Run("zero cap captures nothing", func(t *testing.T) {
+		c := newCappedOutputCapture(0)
+		n, err := c.Write([]byte("data"))
+		if err != nil || n != 4 {
+			t.Fatalf("Write(4) = (%d, %v), want (4, nil)", n, err)
+		}
+		if c.String() != "" {
+			t.Errorf("got %q, want empty", c.String())
+		}
+	})
+}

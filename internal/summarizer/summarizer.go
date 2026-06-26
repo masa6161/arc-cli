@@ -208,6 +208,26 @@ func Summarize(ctx context.Context, agentName string, opts SummarizeOptions, agg
 	stderr := execResult.Stderr()
 	duration := time.Since(start)
 
+	if exitCode != 0 {
+		stdoutHead := string(output)
+		if len(stdoutHead) > 4096 {
+			stdoutHead = stdoutHead[:4096]
+		}
+		if agent.IsAuthFailure(agentName, exitCode, stderr, stdoutHead) {
+			hint := agent.AuthHint(agentName)
+			authStderr := hint
+			if stderr != "" {
+				authStderr = stderr + "\n" + hint
+			}
+			return &Result{
+				Grouped:  domain.GroupedFindings{},
+				ExitCode: exitCode,
+				Stderr:   authStderr,
+				Duration: duration,
+			}, nil
+		}
+	}
+
 	if len(output) == 0 {
 		return &Result{
 			Grouped:  domain.GroupedFindings{},

@@ -117,7 +117,7 @@ func TestNewReviewParser(t *testing.T) {
 }
 
 func TestSupportedAgents(t *testing.T) {
-	expected := []string{"codex", "claude", "gemini"}
+	expected := []string{"codex", "claude", "gemini", "agy"}
 	if len(SupportedAgents) != len(expected) {
 		t.Errorf("SupportedAgents has %d elements, want %d", len(SupportedAgents), len(expected))
 	}
