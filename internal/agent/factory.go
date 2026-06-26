@@ -30,6 +30,11 @@ var registry = map[string]agentRegistry{
 		newReviewParser:  func(id int) ReviewParser { return NewGeminiOutputParser(id) },
 		newSummaryParser: func() SummaryParser { return NewGeminiSummaryParser() },
 	},
+	"agy": {
+		newAgent:         func(opts AgentOptions) Agent { return NewAntigravityAgentWithOptions(opts) },
+		newReviewParser:  func(id int) ReviewParser { return NewAntigravityOutputParser(id) },
+		newSummaryParser: func() SummaryParser { return NewAntigravitySummaryParser() },
+	},
 }
 
 // SupportedAgents lists all valid agent names.
